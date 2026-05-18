@@ -2,7 +2,7 @@
 
 ## 🌍 ACESSE O SITE AQUI:
 
-# 👉 [CLIQUE AQUI PARA VISITAR O SITE](https://brennobenk.github.io/OrnitologiaSantaCatarina/)
+# 👉 [CLIQUE AQUI PARA VISITAR O SITE](https://brennobenk1.github.io/OrnitologiaSantaCatarina/)
 
 # Site desenvolvido completamente para fins científicos, sem fins lucrativos © Brenno Benk
 
