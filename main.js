@@ -3669,7 +3669,7 @@ function escapeHtml(str) {
 
         linhas.push('═══════════════════════════════════════════════════════════');
         linhas.push('  Relatório gerado por Ornitologia Avançada de SC');
-        linhas.push('  https://brennobenk.github.io/OrnitologiaSantaCatarina/');
+        linhas.push('  https://brennobenk1.github.io/OrnitologiaSantaCatarina/');
         linhas.push('═══════════════════════════════════════════════════════════');
 
         return linhas.join('\n');
@@ -12173,7 +12173,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (function () {
     'use strict';
 
-    const INDEX_URL = 'https://raw.githubusercontent.com/brennobenk/OrnitologiaSantaCatarina/main/photo_index.json';
+    const INDEX_URL = 'https://raw.githubusercontent.com/brennobenk1/OrnitologiaSantaCatarina/main/photo_index.json';
     const CACHE_KEY = 'oasc_photo_index_v3';
     const CACHE_TTL = 3600 * 1000; // 1 hora
 
