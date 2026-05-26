@@ -11108,21 +11108,26 @@ function runIndicadoras() {
     }
     const GUILD_SCORE = {
         'Nectarívoro': 3, 'Piscívoro': 3, 'Malacófago': 3,
-        'Insetívoro-aéreo': 2, 'Carnívoro': 2, 'Insetívoro': 2, 'Frugívoro': 2,
-        'Herbívoro': 1, 'Granívoro': 1, 'Filtrador': 1, 'Cleptoparasita': 1,
+        'Insetívoro-aéreo': 2, 'Carnívoro': 2, 'Frugívoro': 2,
+        'Insetívoro': 1, 'Herbívoro': 1, 'Granívoro': 1, 'Filtrador': 1, 'Cleptoparasita': 1,
         'Onívoro': 0, 'Detritívoro': 0
     };
     const HABITAT_SCORE = {'Florestal': 3, 'Aquático': 3, 'Costeiro': 2, 'Campestre': 1, 'Aéreo': 1, 'Generalista': 0};
-    function calcSensitivity(guilda, habitat) {
+    // Bônus de conservação: integra status IUCN/SC na sensibilidade ecológica
+    const CONS_BONUS = { 'LC': 0, 'NT': 1, 'VU': 2, 'EN': 3, 'CR': 4, 'DD': 0, 'NE': 0 };
+    function calcSensitivity(guilda, habitat, iucn, sc) {
         if (!guilda || guilda === '-') return { level: '?', score: -1, label: '?', bg: '#f5f5f5' };
         let gScore = 0;
         Object.entries(GUILD_SCORE).forEach(([key, val]) => { if (guilda.includes(key) && val > gScore) gScore = val; });
         let hScore = 0;
         Object.entries(HABITAT_SCORE).forEach(([key, val]) => { if ((habitat||'').includes(key) && val > hScore) hScore = val; });
-        const total = gScore + hScore;
-        if (total >= 5) return { level: 'Crítica', score: total, label: `🔴 Crítica (${total}pts)`, bg: '#f8d7d7' };
-        if (total >= 3) return { level: 'Alta',    score: total, label: `🟠 Alta (${total}pts)`,    bg: '#fde8c8' };
-        if (total >= 2) return { level: 'Média',   score: total, label: `🟡 Média (${total}pts)`,   bg: '#fdf3dc' };
+        // Bônus conservação: usa o mais alto entre IUCN e SC (Livro Vermelho SP)
+        const consBonus = Math.max(CONS_BONUS[iucn] ?? 0, CONS_BONUS[sc] ?? 0);
+        const total = gScore + hScore + consBonus;
+        // Novos limiares com bônus integrado (máx possível: 3+3+4=10)
+        if (total >= 7) return { level: 'Crítica', score: total, label: `🔴 Crítica (${total}pts)`, bg: '#f8d7d7' };
+        if (total >= 5) return { level: 'Alta',    score: total, label: `🟠 Alta (${total}pts)`,    bg: '#fde8c8' };
+        if (total >= 3) return { level: 'Média',   score: total, label: `🟡 Média (${total}pts)`,   bg: '#fdf3dc' };
         return               { level: 'Baixa',   score: total, label: `🟢 Baixa (${total}pts)`,  bg: '#eef4e4' };
     }
     const results = [];
@@ -11132,7 +11137,7 @@ function runIndicadoras() {
         const iucnScore = cons ? (IUCN_ORDER[cons.iucn] ?? -1) : -1;
         const scScore = cons ? (IUCN_ORDER[cons.sc] ?? -1) : -1;
         if (iucnScore >= minScore || scScore >= minScore) {
-            const sens = calcSensitivity(guild?.guilda || '-', guild?.habitat || '-');
+            const sens = calcSensitivity(guild?.guilda || '-', guild?.habitat || '-', cons?.iucn || 'LC', cons?.sc || 'LC');
             results.push({ sp, nomePopular: cons?.nomePopular||'-', iucn: cons?.iucn||'NE', sc: cons?.sc||'NE', guilda: guild?.guilda||'-', habitat: guild?.habitat||'-', sensitivity: sens.level, sensLabel: sens.label, sensBg: sens.bg, sensScore: sens.score });
         }
     });
@@ -11157,9 +11162,10 @@ function runIndicadoras() {
     });
     html += '</tbody></table>';
     html += `<div style="margin-top:12px;padding:10px 14px;background:var(--green-mist);border-radius:6px;font-size:11.5px;color:var(--text-mid);line-height:1.8;">
-        <strong>Pontuação:</strong> Nectarívoro/Piscívoro/Malacófago=3 · Carnívoro/Insetívoro/Frugívoro=2 · Granívoro/Herbívoro=1 · Onívoro/Detritívoro=0
+        <strong>Pontuação ecológica:</strong> Nectarívoro/Piscívoro/Malacófago=3 · Carnívoro/Frugívoro/Insetívoro-aéreo=2 · Insetívoro/Herbívoro/Granívoro/Filtrador=1 · Onívoro/Detritívoro=0
         + Florestal/Aquático=3 · Costeiro=2 · Campestre/Aéreo=1 · Generalista=0
-        → 🔴 Crítica(≥5) · 🟠 Alta(3–4) · 🟡 Média(2) · 🟢 Baixa(≤1)
+        + <strong>Bônus conservação</strong> (melhor entre IUCN e SC): LC=0 · NT=1 · VU=2 · EN=3 · CR=4
+        → 🔴 Crítica(≥7) · 🟠 Alta(5–6) · 🟡 Média(3–4) · 🟢 Baixa(≤2)
     </div>`;
     document.getElementById('indicadoras-results').innerHTML = results.length ? html : '<p style="padding:14px;color:var(--text-muted);">Nenhuma espécie atende ao limiar selecionado.</p>';
     // Gráfico
