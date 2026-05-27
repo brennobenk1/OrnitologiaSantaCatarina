@@ -11746,8 +11746,11 @@ function buildCoocNetwork(minEdge) {
             const [bx,by]=toCanvas(nodes[e.b].x,nodes[e.b].y);
             const isHov=(hoveredNode===e.a||hoveredNode===e.b);
             const alpha=isHov?0.9:0.2+(e.w/maxW)*0.5;
+            const colorEdges=document.getElementById('cooc-net-coloredges')?.checked;
             ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by);
-            ctx.strokeStyle=isHov?`rgba(200,120,30,${alpha})`:`rgba(80,140,100,${alpha})`;
+            if(isHov){ctx.strokeStyle=`rgba(200,120,30,${alpha})`;}
+            else if(colorEdges){const hx=nodes[e.a].color;const rr=parseInt(hx.slice(1,3),16),gg=parseInt(hx.slice(3,5),16),bb=parseInt(hx.slice(5,7),16);ctx.strokeStyle=`rgba(${rr},${gg},${bb},${alpha})`;}
+            else{ctx.strokeStyle=`rgba(80,140,100,${alpha})`;}
             ctx.lineWidth=Math.max(0.5,(1+(e.w/maxW)*5)*camScale);
             ctx.stroke();
             if(e.w>=2&&camScale>0.5){
@@ -11946,6 +11949,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window._patchCoocMatrix) buildCoocNetwork(parseInt(document.getElementById('cooc-net-min').value)||2);
     });
     document.getElementById('cooc-net-reset')?.addEventListener('click', () => {
+        if (window._patchCoocMatrix) buildCoocNetwork(parseInt(document.getElementById('cooc-net-min').value)||2);
+    });
+    document.getElementById('cooc-net-coloredges')?.addEventListener('change', () => {
         if (window._patchCoocMatrix) buildCoocNetwork(parseInt(document.getElementById('cooc-net-min').value)||2);
     });
     document.getElementById('cooc-net-spread')?.addEventListener('click', () => {
