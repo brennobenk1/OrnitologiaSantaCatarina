@@ -7478,9 +7478,9 @@ generateSpecBtn.addEventListener('click', () => {
 
     renderCurveChart(points, cumulative);
     updateCurveStats(points, cumulative);
-    // Gerar estimadores a partir dos incrementos simulados
+    // Gerar estimadores a partir dos incrementos reais (cada ponto = novas espécies naquele dia)
 const increments = points.map((p, i) => i === 0 ? p.value : p.value - points[i-1].value);
-generateAndRenderEstimators(increments, totalSpecies);
+generateAndRenderEstimators(increments, cumulative);
 });
 
 // Função para renderizar o gráfico com os pontos e a linha de tendência
@@ -10744,7 +10744,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lines = withDate.map(r => {
             const [y, m, d] = r.date.split('-');
             const dateBR = `${d}/${m}/${y}`;
-            const name = r.inputName || r.scientificName || '';
+            const name = r.scientificName || r.inputName || '';
             return `${dateBR}\t${name}`;
         });
         const specBulk = document.getElementById('spec-bulk-data');
