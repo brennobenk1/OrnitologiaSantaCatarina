@@ -9556,13 +9556,55 @@ let chaoChart, jack1Chart, jack2Chart, bootstrapChart, combinedChart;
 
 // ==================== ESTIMADORES DE RIQUEZA A PARTIR DA CURVA ====================
 function generateAndRenderEstimators(increments, totalSpecies) {
-    // increments: array com o número de novas espécies em cada evento
-    // totalSpecies: número total de espécies (acumulado final)
+    // ── CAMINHO PRIORITÁRIO: usar avistamentos reais para montar matriz de incidência ──
+    // Os estimadores (Chao2, Jackknife, Bootstrap) precisam saber quantas vezes cada
+    // espécie apareceu em amostras diferentes — não apenas quando foi PRIMEIRA vez vista.
+    // Usar só os incrementos faz toda espécie virar Q1 (singleton), inflando Chao2 absurdamente.
+    const av = window.AVISTAMENTOS || [];
+    const withDate = av.filter(r => r.date && (r.scientificName || r.inputName));
+
+    if (withDate.length > 0) {
+        // Agrupar avistamentos por data → cada data única = uma amostra independente
+        const dateMap = {};
+        withDate.forEach(r => {
+            const date = r.date; // formato AAAA-MM-DD
+            // Usa nome científico se disponível, senão nome digitado; normaliza para lowercase
+            const sp = (r.scientificName || r.inputName || '').trim().toLowerCase();
+            if (!sp) return;
+            if (!dateMap[date]) dateMap[date] = new Set();
+            dateMap[date].add(sp);
+        });
+
+        const sortedDates = Object.keys(dateMap).sort();
+        const nSamples = sortedDates.length;
+
+        // Lista de todas as espécies únicas presentes nos avistamentos
+        const allSpeciesSet = new Set();
+        withDate.forEach(r => {
+            const sp = (r.scientificName || r.inputName || '').trim().toLowerCase();
+            if (sp) allSpeciesSet.add(sp);
+        });
+        const allSpecies = [...allSpeciesSet];
+        const nSpecies = allSpecies.length;
+
+        // Matriz de incidência real: espécies × amostras (1 = presente na data, 0 = ausente)
+        // Uma espécie vista em 5 datas terá 1 em 5 colunas → Q1/Q2 corretos para os estimadores
+        const incidence = allSpecies.map(sp =>
+            sortedDates.map(date => dateMap[date].has(sp) ? 1 : 0)
+        );
+
+        const results = computeEstimatorsFromIncidence(incidence);
+        renderEstimatorCharts(results, nSamples);
+        return;
+    }
+
+    // ── FALLBACK: sem avistamentos reais, usar incrementos da curva (modo manual) ──
+    // ATENÇÃO: neste modo cada espécie aparece em apenas uma amostra (quando foi
+    // primeiro registrada), o que faz Q2 ≈ 0 e pode inflar Chao2. Use apenas como
+    // referência exploratória quando não há dados de avistamentos com data.
     const nEvents = increments.length;
-    
-    // Simular uma matriz de incidência aleatória que respeite os incrementos
-    // Vamos gerar uma lista de espécies (IDs de 0 a totalSpecies-1) e distribuir pelos eventos
-    const speciesPerEvent = []; // lista de conjuntos de espécies por evento
+
+    const speciesPerEvent = [];
     let nextSpeciesId = 0;
     for (let i = 0; i < nEvents; i++) {
         const newSpecies = [];
@@ -9574,16 +9616,15 @@ function generateAndRenderEstimators(increments, totalSpecies) {
         }
         speciesPerEvent.push(newSpecies);
     }
-    
-    // Se ainda faltarem espécies (por arredondamento), adiciona no último evento
+
     if (nextSpeciesId < totalSpecies) {
         const remaining = totalSpecies - nextSpeciesId;
         for (let r = 0; r < remaining; r++) {
-            speciesPerEvent[nEvents-1].push(nextSpeciesId + r);
+            speciesPerEvent[nEvents - 1].push(nextSpeciesId + r);
         }
     }
 
-    // Construir matriz de incidência: espécies × eventos (presença/ausência)
+    // Matriz de incidência: espécies × eventos
     const incidence = Array.from({ length: totalSpecies }, () => Array(nEvents).fill(0));
     speciesPerEvent.forEach((speciesList, eventIdx) => {
         speciesList.forEach(spId => {
@@ -9591,10 +9632,7 @@ function generateAndRenderEstimators(increments, totalSpecies) {
         });
     });
 
-    // Calcular estimadores para cada número de eventos k
     const results = computeEstimatorsFromIncidence(incidence);
-    
-    // Renderizar gráficos
     renderEstimatorCharts(results, nEvents);
 }
 
