@@ -7252,37 +7252,87 @@ specGenerateFieldsBtn.addEventListener('click', () => {
     }
 });
 
-// Carregar dados em massa no modo específico (formato: data, incremento)
+// Carregar dados em massa no modo específico
+// Aceita dois formatos:
+//   1. YYYY-MM-DD, incremento  (ex: 2025-01-15,3)
+//   2. DD/MM/YYYY[<TAB ou ESPAÇO>[HH:MM ]]nome da espécie  (um registro por linha — calcula incrementos automaticamente)
 specLoadBulkBtn.addEventListener('click', () => {
     const text = specBulkTextarea.value.trim();
     if (!text) return;
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
     curveSpecificList.innerHTML = '';
-    lines.forEach(line => {
-        // Formato esperado: data, incremento (podem ser separados por vírgula ou espaço)
-        let parts = line.split(',').map(p => p.trim());
-        if (parts.length === 2) {
-            const date = parts[0];
-            const inc = parseInt(parts[1], 10);
-            if (/^\d{4}-\d{2}-\d{2}$/.test(date) && !isNaN(inc)) {
-                const div = document.createElement('div');
-                div.style.display = 'flex';
-                div.style.gap = '10px';
-                div.style.alignItems = 'center';
-                div.innerHTML = `
-                    <input type="date" class="spec-date" value="${date}">
-                    <input type="number" class="spec-increment" min="0" step="1" value="${inc}" placeholder="Novas spp." style="width:120px;">
-                    <button class="remove-spec-btn delete-btn" style="padding:4px 10px;">Remover</button>
-                `;
-                curveSpecificList.appendChild(div);
-                div.querySelector('.remove-spec-btn').addEventListener('click', () => div.remove());
+
+    // Detecta formato pelo conteúdo da primeira linha
+    // Formato 2: linha começa com data DD/MM/YYYY seguida de TAB ou espaço e nome de espécie
+    const speciesLineRe = /^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})(?:\s+\d{2}:\d{2})?\s+(.+)$/;
+    const isSpeciesFormat = lines.some(l => speciesLineRe.test(l) && !/^\d{4}-\d{2}-\d{2},/.test(l));
+
+    if (isSpeciesFormat) {
+        // Agrupa espécies por data, calcula novas espécies cumulativas
+        const byDate = {};
+        const dateOrder = [];
+        lines.forEach(line => {
+            const m = line.match(/^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})(?:\s+\d{2}:\d{2})?\s+(.+)$/);
+            if (!m) return;
+            const rawDate = m[1].trim();
+            const species = m[2].trim();
+            // Normaliza para YYYY-MM-DD
+            const parts = rawDate.split(/[\/\-]/);
+            let isoDate;
+            if (parts.length === 3) {
+                if (parts[2].length === 4) isoDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                else if (parts[0].length === 4) isoDate = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+                else isoDate = rawDate;
+            } else { isoDate = rawDate; }
+            if (!byDate[isoDate]) { byDate[isoDate] = []; dateOrder.push(isoDate); }
+            byDate[isoDate].push(species.toLowerCase().trim());
+        });
+        // Remove datas duplicadas mantendo ordem
+        const uniqueDates = [...new Set(dateOrder)].sort();
+        const seenSpecies = new Set();
+        uniqueDates.forEach(isoDate => {
+            const daySpecies = byDate[isoDate];
+            let newCount = 0;
+            daySpecies.forEach(sp => { if (!seenSpecies.has(sp)) { seenSpecies.add(sp); newCount++; } });
+            const div = document.createElement('div');
+            div.style.display = 'flex';
+            div.style.gap = '10px';
+            div.style.alignItems = 'center';
+            div.innerHTML = `
+                <input type="date" class="spec-date" value="${isoDate}">
+                <input type="number" class="spec-increment" min="0" step="1" value="${newCount}" placeholder="Novas spp." style="width:120px;">
+                <button class="remove-spec-btn delete-btn" style="padding:4px 10px;">Remover</button>
+            `;
+            curveSpecificList.appendChild(div);
+            div.querySelector('.remove-spec-btn').addEventListener('click', () => div.remove());
+        });
+    } else {
+        // Formato 1: YYYY-MM-DD, incremento
+        lines.forEach(line => {
+            let parts = line.split(',').map(p => p.trim());
+            if (parts.length === 2) {
+                const date = parts[0];
+                const inc = parseInt(parts[1], 10);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(date) && !isNaN(inc)) {
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.gap = '10px';
+                    div.style.alignItems = 'center';
+                    div.innerHTML = `
+                        <input type="date" class="spec-date" value="${date}">
+                        <input type="number" class="spec-increment" min="0" step="1" value="${inc}" placeholder="Novas spp." style="width:120px;">
+                        <button class="remove-spec-btn delete-btn" style="padding:4px 10px;">Remover</button>
+                    `;
+                    curveSpecificList.appendChild(div);
+                    div.querySelector('.remove-spec-btn').addEventListener('click', () => div.remove());
+                } else {
+                    alert(`Linha inválida: ${line}`);
+                }
             } else {
-                alert(`Linha inválida: ${line}`);
+                alert(`Formato inválido. Use "AAAA-MM-DD, incremento" ou "DD/MM/AAAA nome da espécie".`);
             }
-        } else {
-            alert(`Formato inválido: use "data, incremento" (ex: 2025-01-15, 3)`);
-        }
-    });
+        });
+    }
 });
 
 // Adicionar linha em branco no modo específico (botão + não implementado, mas pode ser adicionado se desejar)
@@ -10680,6 +10730,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) { alert('Nenhum avistamento registrado.'); return; }
         document.getElementById('cooc-data').value = text;
         setTimeout(() => document.getElementById('cooc-run')?.click(), 50);
+    });
+
+    // 🔭 Importar avistamentos → Curva do Coletor (cada dia = uma amostra, calcula incrementos de novas espécies)
+    document.getElementById('curve-import-avist')?.addEventListener('click', () => {
+        const av = window.AVISTAMENTOS || [];
+        const withDate = av.filter(r => r.date);
+        if (!withDate.length) {
+            alert('Nenhum avistamento com data encontrado. Use a aba 🔭 Avistamentos e registre com data.');
+            return;
+        }
+        // Monta texto no formato "DD/MM/AAAA\tnome da espécie" — um por linha
+        const lines = withDate.map(r => {
+            const [y, m, d] = r.date.split('-');
+            const dateBR = `${d}/${m}/${y}`;
+            const name = r.inputName || r.scientificName || '';
+            return `${dateBR}\t${name}`;
+        });
+        const specBulk = document.getElementById('spec-bulk-data');
+        if (specBulk) specBulk.value = lines.join('\n');
+
+        // Muda para modo "Curva de dias específicos"
+        const curveModeSpecBtn = document.getElementById('curve-mode-specific');
+        const curveModeAvgBtn  = document.getElementById('curve-mode-avg');
+        const specPanel = document.getElementById('curve-specific-panel');
+        const avgPanel  = document.getElementById('curve-avg-panel');
+        if (curveModeSpecBtn) {
+            curveModeSpecBtn.classList.add('active');
+            if (curveModeAvgBtn) curveModeAvgBtn.classList.remove('active');
+            if (specPanel) specPanel.style.display = 'block';
+            if (avgPanel)  avgPanel.style.display  = 'none';
+        }
+
+        // Garante modo "Colar datas"
+        const radioPasteBtn = document.querySelector('input[name="spec-input-mode"][value="paste"]');
+        if (radioPasteBtn) {
+            radioPasteBtn.checked = true;
+            const specPasteEl = document.getElementById('spec-paste-area');
+            const specNumEl   = document.getElementById('spec-numbers-area');
+            if (specPasteEl) specPasteEl.style.display = 'block';
+            if (specNumEl)   specNumEl.style.display   = 'none';
+        }
+
+        // Dispara carregamento e geração automática
+        setTimeout(() => {
+            document.getElementById('spec-load-bulk')?.click();
+            setTimeout(() => document.getElementById('curve-generate-spec')?.click(), 100);
+        }, 50);
     });
 
     document.getElementById('sazon-run')?.addEventListener('click', () => {
