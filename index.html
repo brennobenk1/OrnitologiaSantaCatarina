@@ -1851,42 +1851,67 @@
     <!-- Mini map -->
     <div id="campo-map" class="campo-map-container"></div>
 
-    <!-- Form -->
+    <!-- Form simplificado: só botão principal -->
     <div class="campo-form">
-        <div class="campo-input-wrap">
-            <input type="text" id="campo-species-input" class="campo-species-input"
-                   placeholder="🔍 Nome da ave (ex: sabiá-laranjeira) — se não souber, digite: Espécie não identificada"
-                   autocomplete="off" autocorrect="off" spellcheck="false">
-            <div id="campo-autocomplete" class="campo-autocomplete-list" style="display:none;"></div>
-        </div>
-
-        <div id="campo-details" class="campo-details" style="display:none;">
-            <div class="campo-qty-row">
-                <label class="campo-field-label" for="campo-qty">👥 Indivíduos</label>
-                <input type="number" id="campo-qty" class="campo-qty-input"
-                       value="1" min="1" max="9999"
-                       inputmode="numeric" pattern="[0-9]*">
-            </div>
-            <div class="campo-vc-row">
-                <span class="campo-field-label">📋 Tipo de registro</span>
-                <div class="campo-vc-options">
-                    <label class="campo-vc-label" id="campo-vc-v-lbl">
-                        <input type="checkbox" id="campo-avistado" checked>
-                        <span class="campo-vc-ico">👁️</span>
-                        <span class="campo-vc-txt">Avistado</span>
-                    </label>
-                    <label class="campo-vc-label" id="campo-vc-c-lbl">
-                        <input type="checkbox" id="campo-canto">
-                        <span class="campo-vc-ico">🔊</span>
-                        <span class="campo-vc-txt">Canto</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <button id="campo-register-btn" class="campo-register-btn" disabled>
+        <button id="campo-register-btn" class="campo-register-btn">
             🔭 Registrar Espécie
         </button>
+    </div>
+
+    <!-- ── Modal de Registro ── -->
+    <div id="campo-reg-modal" class="campo-reg-modal" style="display:none;">
+        <div class="campo-reg-modal-box">
+            <div class="campo-reg-modal-header">
+                <span>🔭 Novo Registro</span>
+                <button id="campo-reg-modal-close" class="campo-panel-x">✕</button>
+            </div>
+            <div class="campo-reg-modal-body">
+
+                <!-- Checkbox não identificada -->
+                <label class="campo-nid-label">
+                    <input type="checkbox" id="campo-nid-check">
+                    <span class="campo-nid-txt">❓ Espécie não identificada</span>
+                </label>
+
+                <!-- Input de busca (oculto quando checkbox marcado) -->
+                <div id="campo-reg-search-wrap" class="campo-input-wrap">
+                    <input type="text" id="campo-species-input" class="campo-species-input"
+                           placeholder="🔍 Nome da ave"
+                           autocomplete="off" autocorrect="off" spellcheck="false">
+                    <div id="campo-autocomplete" class="campo-autocomplete-list" style="display:none;"></div>
+                </div>
+
+                <!-- Qtd + V/C -->
+                <div id="campo-details" class="campo-details">
+                    <div class="campo-qty-row">
+                        <label class="campo-field-label" for="campo-qty">👥 Indivíduos</label>
+                        <input type="number" id="campo-qty" class="campo-qty-input"
+                               value="1" min="1" max="9999"
+                               inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="campo-vc-row">
+                        <span class="campo-field-label">📋 Tipo de registro</span>
+                        <div class="campo-vc-options">
+                            <label class="campo-vc-label" id="campo-vc-v-lbl">
+                                <input type="checkbox" id="campo-avistado" checked>
+                                <span class="campo-vc-ico">👁️</span>
+                                <span class="campo-vc-txt">Avistado</span>
+                            </label>
+                            <label class="campo-vc-label" id="campo-vc-c-lbl">
+                                <input type="checkbox" id="campo-canto">
+                                <span class="campo-vc-ico">🔊</span>
+                                <span class="campo-vc-txt">Canto</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="campo-confirm-reg-btn" class="campo-register-btn" disabled>
+                    ✅ Confirmar Registro
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <!-- Bottom bar -->
