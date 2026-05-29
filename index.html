@@ -552,8 +552,8 @@
                     <button id="draw-polygon" class="sources-btn">🔷 Desenhar área</button>
                     <button id="add-all-to-polygon" class="generate-btn" style="background:#4c8b4c;">➕ Adicionar todas</button>
                     <button id="clear-drawings" class="delete-btn">🗑️ Limpar desenhos</button>
-                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile (ZIP / .shp)</label>
-                    <input type="file" id="shapefile-upload" accept=".zip,.shp,.dbf,.prj,.shx" multiple style="display:none;">
+                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile (ZIP)</label>
+                    <input type="file" id="shapefile-upload" accept=".zip" style="display:none;">
                     <button id="calculate-species" class="generate-btn" style="background:#8e6b3c;">🔢 Calcular espécies nas áreas</button>
                     <button id="edit-mode-btn" class="sources-btn">✏️ Edição de ponto</button>
                     <button id="edit-area-btn" class="sources-btn">✏️ Editar área (OFF)</button>
@@ -649,7 +649,7 @@
                     </div>
                     <!-- Área para colagem (modo colar) -->
                     <div id="spec-paste-area">
-                        <textarea id="spec-bulk-data" placeholder="Formato 1 — data e incremento:&#10;2025-01-15,3&#10;2025-01-22,2&#10;&#10;Formato 2 — avistamentos (data + espécie):&#10;28/05/2024&#9;saracura do mato&#10;28/05/2024&#9;bem te vi&#10;10/06/2024&#9;João de barro" rows="6" style="width:100%;"></textarea>
+                        <textarea id="spec-bulk-data" placeholder="Formato: data, novas espécies (uma por linha)&#10;Ex:&#10;2025-01-15,3&#10;2025-01-22,2&#10;2025-02-01,1" rows="6" style="width:100%;"></textarea>
                         <button id="spec-load-bulk" class="generate-btn" style="margin-top:5px;">Carregar dados</button>
                     </div>
                     <!-- Área para números de campo (modo apenas números) -->
@@ -1100,10 +1100,6 @@
                 </select>
                 <button id="cooc-net-spread" class="genealogical-view-btn" style="background:var(--amber);color:white;border-color:var(--amber);">💥 Separar Pontos</button>
                 <button id="cooc-net-reset" class="genealogical-view-btn">🔄 Resetar layout</button>
-                <label id="cooc-net-coloredges-label" style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;padding:6px 14px;background:white;border:1.5px solid var(--border);border-radius:6px;transition:all 0.2s;" title="As arestas assumem a cor da guilda do nó de origem">
-                    <input type="checkbox" id="cooc-net-coloredges" style="width:16px;height:16px;cursor:pointer;accent-color:var(--green-base);">
-                    🎨 Colorir arestas por guilda
-                </label>
             </div>
             <div id="cooc-net-container" style="width:100%; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--green-mist); position:relative; overflow:hidden;">
                 <canvas id="cooc-net-canvas"></canvas>
