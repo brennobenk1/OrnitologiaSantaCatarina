@@ -13254,7 +13254,16 @@ function init() {
         document.getElementById('campo-list-panel').style.display = 'none';
     });
 
-    document.getElementById('campo-register-btn').addEventListener('click', registerRecord);
+    document.getElementById('campo-register-btn').addEventListener('click', openRegistroModal);
+
+    var regModalClose = document.getElementById('campo-reg-modal-close');
+    if (regModalClose) regModalClose.addEventListener('click', closeRegistroModal);
+
+    var confirmRegBtn = document.getElementById('campo-confirm-reg-btn');
+    if (confirmRegBtn) confirmRegBtn.addEventListener('click', function() {
+        registerRecord();
+        closeRegistroModal();
+    });
     document.getElementById('campo-export-xls').addEventListener('click', function() { exportXLS(); });
     document.getElementById('campo-export-pdf').addEventListener('click', function() { exportPDF(); });
     document.getElementById('campo-copy-table').addEventListener('click', copyTable);
@@ -13282,6 +13291,7 @@ function init() {
     });
 
     setupCampoAutocomplete();
+    setupNidCheckbox();
     syncVCVisual();
 }
 
