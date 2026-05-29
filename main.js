@@ -12813,7 +12813,7 @@ function setupCampoAutocomplete() {
 
     input.addEventListener('input', function() {
         var val = this.value.trim();
-        if (val.length < 2) { sugDiv.style.display = 'none'; campoSelectedBird = null; showDetails(false); return; }
+        if (val.length < 2) { sugDiv.style.display = 'none'; campoSelectedBird = null; updateConfirmBtn(); return; }
         var norm = val.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[-\s]+/g,' ').trim();
         var matches = (typeof BIRD_DATABASE !== 'undefined' ? BIRD_DATABASE : []).filter(function(b) {
             var nc = b.commonName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[-\s]+/g,' ');
@@ -12830,13 +12830,15 @@ function setupCampoAutocomplete() {
         sugDiv.querySelectorAll('.campo-sug-item').forEach(function(item) {
             item.addEventListener('click', function() {
                 campoSelectedBird = { commonName: this.dataset.com, scientificName: this.dataset.sci };
-                input.value = this.dataset.com + ' — ' + this.dataset.sci;
+                input.value = this.dataset.com;
                 sugDiv.style.display = 'none';
-                showDetails(true);
+                updateConfirmBtn();
                 var qtyEl = document.getElementById('campo-qty');
                 if (qtyEl) { qtyEl.focus(); qtyEl.select(); }
             });
         });
+        campoSelectedBird = null;
+        updateConfirmBtn();
     });
     document.addEventListener('click', function(e) {
         if (!input.contains(e.target) && !sugDiv.contains(e.target)) sugDiv.style.display = 'none';
@@ -12852,16 +12854,74 @@ function setupCampoAutocomplete() {
 
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function showDetails(show) {
-    var d = document.getElementById('campo-details');
-    var b = document.getElementById('campo-register-btn');
-    if (d) d.style.display = show ? 'flex' : 'none';
-    if (b) b.disabled = !show;
+/* ── Modal de Registro ─────────────────────────── */
+function openRegistroModal() {
+    var modal = document.getElementById('campo-reg-modal');
+    if (!modal) return;
+    // reset modal state
+    var nidCheck = document.getElementById('campo-nid-check');
+    var searchWrap = document.getElementById('campo-reg-search-wrap');
+    var input = document.getElementById('campo-species-input');
+    var sugDiv = document.getElementById('campo-autocomplete');
+    if (nidCheck) nidCheck.checked = false;
+    if (searchWrap) searchWrap.style.display = 'block';
+    if (input) input.value = '';
+    if (sugDiv) sugDiv.style.display = 'none';
+    campoSelectedBird = null;
+    var qtyEl = document.getElementById('campo-qty');
+    if (qtyEl) qtyEl.value = '1';
+    var avist = document.getElementById('campo-avistado');
+    var canto = document.getElementById('campo-canto');
+    if (avist) avist.checked = true;
+    if (canto) canto.checked = false;
+    updateConfirmBtn();
+    modal.style.display = 'flex';
+    setTimeout(function() { if (input) input.focus(); }, 120);
 }
+
+function closeRegistroModal() {
+    var modal = document.getElementById('campo-reg-modal');
+    if (modal) modal.style.display = 'none';
+    var sugDiv = document.getElementById('campo-autocomplete');
+    if (sugDiv) sugDiv.style.display = 'none';
+}
+
+function updateConfirmBtn() {
+    var btn = document.getElementById('campo-confirm-reg-btn');
+    if (!btn) return;
+    var nidCheck = document.getElementById('campo-nid-check');
+    var isNid = nidCheck && nidCheck.checked;
+    btn.disabled = !(isNid || campoSelectedBird);
+}
+
+function setupNidCheckbox() {
+    var nidCheck = document.getElementById('campo-nid-check');
+    var searchWrap = document.getElementById('campo-reg-search-wrap');
+    if (!nidCheck || !searchWrap) return;
+    nidCheck.addEventListener('change', function() {
+        var checked = this.checked;
+        searchWrap.style.display = checked ? 'none' : 'block';
+        if (checked) {
+            campoSelectedBird = null;
+            var sugDiv = document.getElementById('campo-autocomplete');
+            if (sugDiv) sugDiv.style.display = 'none';
+        }
+        updateConfirmBtn();
+    });
+}
+
+function showDetails(show) { /* kept for compat — details always visible in modal now */ }
 
 /* ── Register record ─────────────────────────── */
 function registerRecord() {
-    if (!campoSelectedBird) return;
+    var nidCheck = document.getElementById('campo-nid-check');
+    var isNid = nidCheck && nidCheck.checked;
+    if (!isNid && !campoSelectedBird) return;
+
+    var bird = isNid
+        ? { commonName: 'Espécie não identificada', scientificName: '' }
+        : campoSelectedBird;
+
     var qty    = Math.max(1, parseInt(document.getElementById('campo-qty').value, 10) || 1);
     var vis    = document.getElementById('campo-avistado').checked;
     var snd    = document.getElementById('campo-canto').checked;
@@ -12879,8 +12939,8 @@ function registerRecord() {
         id: Date.now(),
         date: dd + '/' + mm + '/' + yyyy,
         time: HH + ':' + MM,
-        commonName:   campoSelectedBird.commonName,
-        scientName:   campoSelectedBird.scientificName,
+        commonName:   bird.commonName,
+        scientName:   bird.scientificName,
         vc:   vc,
         temp: campoCurrentTemp,
         lat:  campoCurrentGPS ? campoCurrentGPS.lat : null,
@@ -12899,24 +12959,23 @@ function registerRecord() {
     }
 
     updateCounter();
-    resetForm();
 
-    /* flash feedback */
-    var btn = document.getElementById('campo-register-btn');
-    var orig = btn.textContent;
-    btn.textContent = '✅ Registrado!';
-    btn.style.background = '#388e3c';
-    setTimeout(function() { btn.textContent = orig; btn.style.background = ''; }, 1400);
+    /* flash feedback no botão principal */
+    var mainBtn = document.getElementById('campo-register-btn');
+    var orig = mainBtn ? mainBtn.textContent : '';
+    if (mainBtn) {
+        mainBtn.textContent = '✅ Registrado!';
+        mainBtn.style.background = '#388e3c';
+        setTimeout(function() { mainBtn.textContent = orig; mainBtn.style.background = ''; }, 1400);
+    }
+
+    closeRegistroModal();
+    campoSelectedBird = null;
 }
 
 function resetForm() {
-    document.getElementById('campo-species-input').value = '';
-    document.getElementById('campo-qty').value = '1';
-    document.getElementById('campo-avistado').checked = true;
-    document.getElementById('campo-canto').checked = false;
     campoSelectedBird = null;
-    showDetails(false);
-    document.getElementById('campo-species-input').focus();
+    closeRegistroModal();
 }
 
 /* ── Counter ─────────────────────────────────── */
