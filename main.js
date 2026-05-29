@@ -12654,3 +12654,539 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 })();
 // ==================== FIM DARWIN CORE ====================
+
+
+// ==================== MODO CAMPO ====================
+(function () {
+'use strict';
+
+/* ── State ─────────────────────────────────────── */
+var campoRecords   = [];        // [{id,date,time,commonName,scientName,vc,temp,lat,lng,qty}]
+var campoMap       = null;
+var campoMarkersLyr= null;
+var campoGPSMarker = null;
+var campoWatchId   = null;
+var campoCurrentGPS= null;
+var campoCurrentTemp='--';
+var campoSelectedBird = null;
+var _tempTimer     = null;
+var _vcSyncing     = false;
+
+/* ── Open / Close ──────────────────────────────── */
+function openCampo() {
+    var ov = document.getElementById('campo-overlay');
+    ov.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(function() {
+        initCampoMap();
+        startCampoGPS();
+    }, 80);
+}
+function closeCampo() {
+    document.getElementById('campo-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    if (campoWatchId !== null) {
+        navigator.geolocation.clearWatch(campoWatchId);
+        campoWatchId = null;
+    }
+    hidePanels();
+}
+
+/* ── Map ───────────────────────────────────────── */
+function initCampoMap() {
+    if (campoMap) { setTimeout(function(){ campoMap.invalidateSize(); }, 200); return; }
+    campoMap = L.map('campo-map', {
+        center: [-27.5954, -48.548],
+        zoom: 13,
+        zoomControl: true,
+        attributionControl: false
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(campoMap);
+    campoMarkersLyr = L.layerGroup().addTo(campoMap);
+    renderCampoMarkers();
+    setTimeout(function(){ campoMap.invalidateSize(); }, 300);
+}
+
+/* ── GPS ───────────────────────────────────────── */
+function startCampoGPS() {
+    if (!navigator.geolocation) {
+        setGPSStatus('📍 GPS não disponível neste dispositivo');
+        return;
+    }
+    setGPSStatus('📍 Aguardando sinal GPS…');
+    campoWatchId = navigator.geolocation.watchPosition(
+        function(pos) {
+            var lat = pos.coords.latitude;
+            var lng = pos.coords.longitude;
+            var acc = Math.round(pos.coords.accuracy);
+            campoCurrentGPS = { lat: lat, lng: lng };
+            setGPSStatus('📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' (±' + acc + 'm)');
+            if (campoMap) {
+                if (campoGPSMarker) {
+                    campoGPSMarker.setLatLng([lat, lng]);
+                } else {
+                    campoGPSMarker = L.circleMarker([lat, lng], {
+                        radius: 9, fillColor: '#1565C0', color: '#fff', weight: 2.5, fillOpacity: .9
+                    }).addTo(campoMap).bindPopup('📍 Você está aqui');
+                    campoMap.setView([lat, lng], 15);
+                }
+            }
+            fetchTemperature(lat, lng);
+        },
+        function(err) {
+            var msgs = { 1:'📍 GPS negado — habilite nas configurações', 2:'📍 GPS indisponível', 3:'📍 Timeout GPS — tente novamente' };
+            setGPSStatus(msgs[err.code] || '📍 Erro GPS');
+        },
+        { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000 }
+    );
+}
+function setGPSStatus(msg) {
+    var el = document.getElementById('campo-gps-status');
+    if (el) el.textContent = msg;
+}
+
+/* ── Temperature (Open-Meteo, debounced) ──────── */
+function fetchTemperature(lat, lng) {
+    if (_tempTimer) clearTimeout(_tempTimer);
+    _tempTimer = setTimeout(function() {
+        var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(4) +
+                  '&longitude=' + lng.toFixed(4) + '&current_weather=true';
+        fetch(url).then(function(r){ return r.json(); }).then(function(d) {
+            if (d.current_weather && d.current_weather.temperature !== undefined) {
+                campoCurrentTemp = d.current_weather.temperature + '\u00b0C';
+                var el = document.getElementById('campo-temp-display');
+                if (el) el.textContent = '🌡️ ' + campoCurrentTemp;
+            }
+        }).catch(function(){});
+    }, 3500);
+}
+
+/* ── Autocomplete ─────────────────────────────── */
+function setupCampoAutocomplete() {
+    var input  = document.getElementById('campo-species-input');
+    var sugDiv = document.getElementById('campo-autocomplete');
+    if (!input || !sugDiv) return;
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim();
+        if (val.length < 2) { sugDiv.style.display = 'none'; campoSelectedBird = null; showDetails(false); return; }
+        var norm = val.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[-\s]+/g,' ').trim();
+        var matches = (typeof BIRD_DATABASE !== 'undefined' ? BIRD_DATABASE : []).filter(function(b) {
+            var nc = b.commonName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[-\s]+/g,' ');
+            var ns = b.scientificName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[-\s]+/g,' ');
+            return nc.includes(norm) || ns.includes(norm);
+        }).slice(0, 9);
+        if (!matches.length) { sugDiv.style.display = 'none'; return; }
+        sugDiv.innerHTML = matches.map(function(b) {
+            return '<div class="campo-sug-item" data-sci="' + escHtml(b.scientificName) + '" data-com="' + escHtml(b.commonName) + '">' +
+                   '<span class="campo-sug-common">' + escHtml(b.commonName) + '</span>' +
+                   '<span class="campo-sug-sci">' + escHtml(b.scientificName) + '</span></div>';
+        }).join('');
+        sugDiv.style.display = 'block';
+        sugDiv.querySelectorAll('.campo-sug-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                campoSelectedBird = { commonName: this.dataset.com, scientificName: this.dataset.sci };
+                input.value = this.dataset.com + ' — ' + this.dataset.sci;
+                sugDiv.style.display = 'none';
+                showDetails(true);
+                var qtyEl = document.getElementById('campo-qty');
+                if (qtyEl) { qtyEl.focus(); qtyEl.select(); }
+            });
+        });
+    });
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !sugDiv.contains(e.target)) sugDiv.style.display = 'none';
+    });
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            var first = sugDiv.querySelector('.campo-sug-item');
+            if (first && sugDiv.style.display === 'block') { first.click(); return; }
+            if (campoSelectedBird) registerRecord();
+        }
+    });
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showDetails(show) {
+    var d = document.getElementById('campo-details');
+    var b = document.getElementById('campo-register-btn');
+    if (d) d.style.display = show ? 'flex' : 'none';
+    if (b) b.disabled = !show;
+}
+
+/* ── Register record ─────────────────────────── */
+function registerRecord() {
+    if (!campoSelectedBird) return;
+    var qty    = Math.max(1, parseInt(document.getElementById('campo-qty').value, 10) || 1);
+    var vis    = document.getElementById('campo-avistado').checked;
+    var snd    = document.getElementById('campo-canto').checked;
+    if (!vis && !snd) { vis = true; document.getElementById('campo-avistado').checked = true; }
+    var vc = (vis && snd) ? 'V/C' : (vis ? 'V' : 'C');
+
+    var now  = new Date();
+    var dd   = String(now.getDate()).padStart(2,'0');
+    var mm   = String(now.getMonth()+1).padStart(2,'0');
+    var yyyy = now.getFullYear();
+    var HH   = String(now.getHours()).padStart(2,'0');
+    var MM   = String(now.getMinutes()).padStart(2,'0');
+
+    var rec = {
+        id: Date.now(),
+        date: dd + '/' + mm + '/' + yyyy,
+        time: HH + ':' + MM,
+        commonName:   campoSelectedBird.commonName,
+        scientName:   campoSelectedBird.scientificName,
+        vc:   vc,
+        temp: campoCurrentTemp,
+        lat:  campoCurrentGPS ? campoCurrentGPS.lat : null,
+        lng:  campoCurrentGPS ? campoCurrentGPS.lng : null,
+        qty:  qty
+    };
+    campoRecords.push(rec);
+
+    /* map marker */
+    if (campoMap && campoMarkersLyr && rec.lat !== null) {
+        var m = L.circleMarker([rec.lat, rec.lng], {
+            radius: 7, fillColor: '#4caf50', color: '#fff', weight: 2, fillOpacity: .88
+        }).addTo(campoMarkersLyr);
+        m.bindPopup('<b>' + escHtml(rec.commonName) + '</b><br><i>' + escHtml(rec.scientName) +
+                    '</i><br>' + vc + ' · ' + qty + '× · ' + rec.temp);
+    }
+
+    updateCounter();
+    resetForm();
+
+    /* flash feedback */
+    var btn = document.getElementById('campo-register-btn');
+    var orig = btn.textContent;
+    btn.textContent = '✅ Registrado!';
+    btn.style.background = '#388e3c';
+    setTimeout(function() { btn.textContent = orig; btn.style.background = ''; }, 1400);
+}
+
+function resetForm() {
+    document.getElementById('campo-species-input').value = '';
+    document.getElementById('campo-qty').value = '1';
+    document.getElementById('campo-avistado').checked = true;
+    document.getElementById('campo-canto').checked = false;
+    campoSelectedBird = null;
+    showDetails(false);
+    document.getElementById('campo-species-input').focus();
+}
+
+/* ── Counter ─────────────────────────────────── */
+function updateCounter() {
+    var n = campoRecords.length;
+    var label = n + ' registro' + (n !== 1 ? 's' : '');
+    var el1 = document.getElementById('campo-counter');
+    var el2 = document.getElementById('campo-list-btn');
+    if (el1) el1.textContent = label;
+    if (el2) el2.textContent = '📋 Ver Lista (' + n + ')';
+}
+
+/* ── Map markers ─────────────────────────────── */
+function renderCampoMarkers() {
+    if (!campoMarkersLyr) return;
+    campoMarkersLyr.clearLayers();
+    campoRecords.forEach(function(r) {
+        if (r.lat !== null && r.lng !== null) {
+            var m = L.circleMarker([r.lat, r.lng], {
+                radius: 7, fillColor: '#4caf50', color: '#fff', weight: 2, fillOpacity: .88
+            }).addTo(campoMarkersLyr);
+            m.bindPopup('<b>' + escHtml(r.commonName) + '</b><br><i>' + escHtml(r.scientName) +
+                        '</i><br>' + r.vc + ' · ' + r.qty + '× · ' + r.temp);
+        }
+    });
+}
+
+/* ── List panel ──────────────────────────────── */
+function renderList() {
+    var el = document.getElementById('campo-list-content');
+    if (!el) return;
+    if (!campoRecords.length) {
+        el.innerHTML = '<p class="campo-empty-msg">🐦 Nenhum registro ainda.<br>Comece adicionando uma espécie!</p>';
+        return;
+    }
+    var html = '<div class="campo-records-list">';
+    campoRecords.forEach(function(r, idx) {
+        var coords = r.lat !== null ? r.lat.toFixed(5) + ', ' + r.lng.toFixed(5) : 'sem GPS';
+        html += '<div class="campo-record-item">' +
+            '<div class="campo-record-main">' +
+                '<span class="campo-record-name">' + escHtml(r.commonName) + '</span>' +
+                '<span class="campo-record-sci">' + escHtml(r.scientName) + '</span>' +
+            '</div>' +
+            '<div class="campo-record-tags">' +
+                '<span class="campo-record-tag">📅 ' + r.date + ' ' + r.time + '</span>' +
+                '<span class="campo-record-tag">👥 ' + r.qty + '×</span>' +
+                '<span class="campo-record-tag">📋 ' + r.vc + '</span>' +
+                '<span class="campo-record-tag">🌡️ ' + r.temp + '</span>' +
+                '<span class="campo-record-tag">📍 ' + escHtml(coords) + '</span>' +
+            '</div>' +
+            '<button class="campo-remove-btn" data-idx="' + idx + '" title="Remover">🗑️</button>' +
+        '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    el.querySelectorAll('.campo-remove-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            campoRecords.splice(parseInt(this.dataset.idx, 10), 1);
+            renderList();
+            renderCampoMarkers();
+            updateCounter();
+        });
+    });
+}
+
+/* ── Build expanded rows for export ─────────── */
+function buildRows() {
+    var rows = []; var n = 0;
+    campoRecords.forEach(function(r) {
+        var qty = r.qty || 1;
+        var coords = r.lat !== null ? r.lat.toFixed(6) + ', ' + r.lng.toFixed(6) : '--';
+        for (var i = 0; i < qty; i++) {
+            n++;
+            rows.push({
+                num: n,
+                date: r.date,
+                time: r.time,
+                commonName: r.commonName,
+                scientName: r.scientName,
+                vc:   r.vc,
+                temp: r.temp,
+                coords: coords
+            });
+        }
+    });
+    return rows;
+}
+
+/* ── Export XLS ──────────────────────────────── */
+function exportXLS() {
+    var rows = buildRows();
+    if (!rows.length) { alert('Nenhum registro para exportar.'); return; }
+    /* Lazy-load SheetJS if not present */
+    function doExport(XLSX) {
+        var header = ['N\u00b0 Amostragem','DATA','Horario','Nome popular','Nome cientifico','Avistado ou Canto(V/C)?','Temperatura','Coordenadas'];
+        var data = [header].concat(rows.map(function(r) {
+            return [r.num, r.date, r.time, r.commonName, r.scientName, r.vc, r.temp, r.coords];
+        }));
+        var ws = XLSX.utils.aoa_to_sheet(data);
+        /* Column widths */
+        ws['!cols'] = [10,14,12,30,36,22,14,34].map(function(w){ return {wch:w}; });
+        /* Style header row bold */
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Campo');
+        XLSX.writeFile(wb, 'registros_campo_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    }
+    if (window.XLSX) { doExport(window.XLSX); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+    s.onload = function() { doExport(window.XLSX); };
+    s.onerror = function() { alert('Erro ao carregar a biblioteca Excel. Verifique sua conexão.'); };
+    document.head.appendChild(s);
+}
+
+/* ── Export PDF ──────────────────────────────── */
+function exportPDF() {
+    var rows = buildRows();
+    if (!rows.length) { alert('Nenhum registro para exportar.'); return; }
+    if (!window.jspdf) { alert('jsPDF não carregado.'); return; }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    /* Title */
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(13);
+    doc.setTextColor(27, 94, 32);
+    doc.text('Registros de Campo — Ornitologia SC', 14, 14);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100,100,100);
+    doc.text('Gerado em: ' + new Date().toLocaleString('pt-BR') + '  |  Total de linhas: ' + rows.length, 14, 20);
+
+    /* Table */
+    var cols  = ['N\u00b0', 'Data', 'Hor\u00e1rio', 'Nome popular', 'Nome cient\u00edfico', 'V/C', 'Temp.', 'Coordenadas'];
+    var widths= [11, 21, 17, 44, 52, 13, 16, 56];
+    var xs = []; var cx = 14;
+    widths.forEach(function(w){ xs.push(cx); cx += w; });
+    var y = 26;
+
+    /* Header */
+    doc.setFillColor(27, 94, 32);
+    doc.rect(14, y, cx-14, 7, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    cols.forEach(function(h, i){ doc.text(h, xs[i]+1, y+4.8); });
+    y += 7;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7);
+    rows.forEach(function(row, ri) {
+        if (y > 192) { doc.addPage(); y = 14; }
+        if (ri % 2 === 0) { doc.setFillColor(241,248,233); doc.rect(14, y, cx-14, 6.2, 'F'); }
+        doc.setTextColor(30,30,30);
+        var cells = [String(row.num), row.date, row.time, row.commonName, row.scientName, row.vc, row.temp, row.coords];
+        cells.forEach(function(cell, i) {
+            var txt = String(cell||'');
+            var maxPx = widths[i] - 2;
+            /* crude truncation */
+            while (doc.getTextWidth(txt) > maxPx && txt.length > 2) txt = txt.slice(0,-1);
+            doc.text(txt, xs[i]+1, y+4.2);
+        });
+        doc.setDrawColor(200,228,200);
+        doc.line(14, y+6.2, cx, y+6.2);
+        y += 6.2;
+    });
+
+    doc.save('registros_campo_' + new Date().toISOString().slice(0,10) + '.pdf');
+}
+
+/* ── Copy table ──────────────────────────────── */
+function copyTable() {
+    var rows = buildRows();
+    if (!rows.length) { alert('Nenhum registro para copiar.'); return; }
+    var header = 'N\u00b0 Amostragem\tDATA\tHorario\tNome popular\tNome cientifico\tAvistado ou Canto(V/C)?\tTemperatura\tCoordenadas';
+    var lines = rows.map(function(r) {
+        return r.num + '\t' + r.date + '\t' + r.time + '\t' + r.commonName + '\t' + r.scientName + '\t' + r.vc + '\t' + r.temp + '\t' + r.coords;
+    });
+    var text = header + '\n' + lines.join('\n');
+    function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); alert('\u2705 Tabela copiada para \u00e1rea de transfer\u00eancia!'); }
+        catch(e) { alert('N\u00e3o foi poss\u00edvel copiar. Tente o bot\u00e3o de download.'); }
+        ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function(){ alert('\u2705 Tabela copiada!'); }).catch(fallback);
+    } else { fallback(); }
+}
+
+/* ── Import to Avistamentos ──────────────────── */
+function importToAvist() {
+    if (!campoRecords.length) { alert('Nenhum registro para importar.'); return; }
+    var lines = [];
+    campoRecords.forEach(function(r) {
+        var qty = r.qty || 1;
+        for (var i = 0; i < qty; i++) {
+            lines.push(r.date + ' ' + r.time + ' ' + r.commonName);
+        }
+    });
+    var text = lines.join('\n');
+
+    var ta  = document.getElementById('avist-date-input');
+    var btn = document.getElementById('avist-date-add');
+    if (ta) {
+        ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + text;
+        if (btn) {
+            try { btn.click(); } catch(e) {}
+        }
+    }
+    /* Switch to avistamentos tab */
+    var tabBtn = document.querySelector('[data-tab="avistamentos-section"]');
+    if (tabBtn) tabBtn.click();
+
+    closeCampo();
+    setTimeout(function(){
+        alert('\u2705 ' + campoRecords.length + ' registro(s) (' + lines.length + ' linhas) importados para Avistamentos!');
+    }, 300);
+}
+
+/* ── Panels ──────────────────────────────────── */
+function hidePanels() {
+    var cfg = document.getElementById('campo-config-panel');
+    var lst = document.getElementById('campo-list-panel');
+    if (cfg) cfg.style.display = 'none';
+    if (lst) lst.style.display = 'none';
+}
+function togglePanel(id, renderFn) {
+    var el = document.getElementById(id);
+    var other = id === 'campo-config-panel' ? 'campo-list-panel' : 'campo-config-panel';
+    document.getElementById(other).style.display = 'none';
+    if (el.style.display === 'none') {
+        if (renderFn) renderFn();
+        el.style.display = 'flex';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+/* ── V/C checkbox sync (visual) ─────────────── */
+function syncVCVisual() {
+    var vLbl = document.getElementById('campo-vc-v-lbl');
+    var cLbl = document.getElementById('campo-vc-c-lbl');
+    var vis  = document.getElementById('campo-avistado');
+    var snd  = document.getElementById('campo-canto');
+    if (!vLbl || !cLbl) return;
+    function upd() {
+        vLbl.style.borderColor = vis.checked ? '#2e7d32' : '#c8e6c9';
+        vLbl.style.background  = vis.checked ? '#e8f5e9' : '#fff';
+        cLbl.style.borderColor = snd.checked ? '#2e7d32' : '#c8e6c9';
+        cLbl.style.background  = snd.checked ? '#e8f5e9' : '#fff';
+    }
+    vis.addEventListener('change', upd);
+    snd.addEventListener('change', upd);
+    upd();
+}
+
+/* ── Init ────────────────────────────────────── */
+function init() {
+    var openBtn = document.getElementById('campo-open-btn');
+    if (openBtn) openBtn.addEventListener('click', openCampo);
+
+    document.getElementById('campo-close-btn').addEventListener('click', closeCampo);
+
+    document.getElementById('campo-config-btn').addEventListener('click', function() {
+        togglePanel('campo-config-panel', null);
+    });
+    document.getElementById('campo-config-close').addEventListener('click', function() {
+        document.getElementById('campo-config-panel').style.display = 'none';
+    });
+    document.getElementById('campo-list-btn').addEventListener('click', function() {
+        togglePanel('campo-list-panel', renderList);
+    });
+    document.getElementById('campo-list-close').addEventListener('click', function() {
+        document.getElementById('campo-list-panel').style.display = 'none';
+    });
+
+    document.getElementById('campo-register-btn').addEventListener('click', registerRecord);
+    document.getElementById('campo-export-xls').addEventListener('click', function() { exportXLS(); });
+    document.getElementById('campo-export-pdf').addEventListener('click', function() { exportPDF(); });
+    document.getElementById('campo-copy-table').addEventListener('click', copyTable);
+    document.getElementById('campo-import-avist').addEventListener('click', importToAvist);
+    document.getElementById('campo-clear-list').addEventListener('click', function() {
+        if (campoRecords.length === 0) { alert('A lista já está vazia.'); return; }
+        if (confirm('Apagar todos os ' + campoRecords.length + ' registro(s)?')) {
+            campoRecords = [];
+            renderCampoMarkers();
+            updateCounter();
+            document.getElementById('campo-list-panel').style.display = 'none';
+        }
+    });
+
+    /* Tap outside panels to close */
+    document.getElementById('campo-overlay').addEventListener('click', function(e) {
+        var cfgP = document.getElementById('campo-config-panel');
+        var lstP = document.getElementById('campo-list-panel');
+        if (cfgP.style.display !== 'none' && !cfgP.contains(e.target) &&
+            e.target !== document.getElementById('campo-config-btn'))
+            cfgP.style.display = 'none';
+        if (lstP.style.display !== 'none' && !lstP.contains(e.target) &&
+            e.target !== document.getElementById('campo-list-btn'))
+            lstP.style.display = 'none';
+    });
+
+    setupCampoAutocomplete();
+    syncVCVisual();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+})();
+// ==================== FIM MODO CAMPO ====================
