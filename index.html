@@ -39,6 +39,8 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico">
 
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
 
     <!-- ══════════════════════════════════════════
          RASTREADOR DE VISITAS — Google Sheets
@@ -61,6 +63,7 @@
         <button id="help-button-fixed" title="Ajuda" style="width:36px;height:36px;font-size:18px;border-radius:50%;background:var(--green-base);border:1.5px solid var(--green-base);color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-soft);">?</button>
         <button id="settings-open-btn" title="Configurações" style="width:36px;height:36px;font-size:18px;border-radius:50%;background:var(--green-base);border:1.5px solid var(--green-base);color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-soft);transition:all var(--transition);">⚙️</button>
         <button id="download-charts-btn" title="Baixar gráficos" style="width:36px;height:36px;font-size:18px;border-radius:50%;background:var(--green-base);border:1.5px solid var(--green-base);color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-soft);transition:all var(--transition);">⬇️</button>
+        <button id="campo-open-btn" title="Modo Campo" style="width:36px;height:36px;font-size:18px;border-radius:50%;background:#2e7d32;border:1.5px solid #2e7d32;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-soft);transition:all var(--transition);">🌿</button>
         <button id="report-btn" title="Relatório Preliminar" style="width:36px;height:36px;font-size:18px;border-radius:50%;background:var(--amber);border:1.5px solid var(--amber);color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-soft);transition:all var(--transition);">📄</button>
     </div>
     <div class="container">
@@ -552,8 +555,8 @@
                     <button id="draw-polygon" class="sources-btn">🔷 Desenhar área</button>
                     <button id="add-all-to-polygon" class="generate-btn" style="background:#4c8b4c;">➕ Adicionar todas</button>
                     <button id="clear-drawings" class="delete-btn">🗑️ Limpar desenhos</button>
-                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile (ZIP)</label>
-                    <input type="file" id="shapefile-upload" accept=".zip" style="display:none;">
+                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile (ZIP / .shp)</label>
+                    <input type="file" id="shapefile-upload" accept=".zip,.shp,.dbf,.prj,.shx" multiple style="display:none;">
                     <button id="calculate-species" class="generate-btn" style="background:#8e6b3c;">🔢 Calcular espécies nas áreas</button>
                     <button id="edit-mode-btn" class="sources-btn">✏️ Edição de ponto</button>
                     <button id="edit-area-btn" class="sources-btn">✏️ Editar área (OFF)</button>
@@ -649,7 +652,7 @@
                     </div>
                     <!-- Área para colagem (modo colar) -->
                     <div id="spec-paste-area">
-                        <textarea id="spec-bulk-data" placeholder="Formato: data, novas espécies (uma por linha)&#10;Ex:&#10;2025-01-15,3&#10;2025-01-22,2&#10;2025-02-01,1" rows="6" style="width:100%;"></textarea>
+                        <textarea id="spec-bulk-data" placeholder="Formato 1 — data e incremento:&#10;2025-01-15,3&#10;2025-01-22,2&#10;&#10;Formato 2 — avistamentos (data + espécie):&#10;28/05/2024&#9;saracura do mato&#10;28/05/2024&#9;bem te vi&#10;10/06/2024&#9;João de barro" rows="6" style="width:100%;"></textarea>
                         <button id="spec-load-bulk" class="generate-btn" style="margin-top:5px;">Carregar dados</button>
                     </div>
                     <!-- Área para números de campo (modo apenas números) -->
@@ -1100,6 +1103,10 @@
                 </select>
                 <button id="cooc-net-spread" class="genealogical-view-btn" style="background:var(--amber);color:white;border-color:var(--amber);">💥 Separar Pontos</button>
                 <button id="cooc-net-reset" class="genealogical-view-btn">🔄 Resetar layout</button>
+                <label id="cooc-net-coloredges-label" style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;padding:6px 14px;background:white;border:1.5px solid var(--border);border-radius:6px;transition:all 0.2s;" title="As arestas assumem a cor da guilda do nó de origem">
+                    <input type="checkbox" id="cooc-net-coloredges" style="width:16px;height:16px;cursor:pointer;accent-color:var(--green-base);">
+                    🎨 Colorir arestas por guilda
+                </label>
             </div>
             <div id="cooc-net-container" style="width:100%; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--green-mist); position:relative; overflow:hidden;">
                 <canvas id="cooc-net-canvas"></canvas>
@@ -1821,5 +1828,102 @@
 ══════════════════════════════════════════════════════════ -->
 
     <script src="main.js"></script>
+
+<!-- ==================== MODO CAMPO ==================== -->
+<div id="campo-overlay" class="campo-overlay" style="display:none;">
+
+    <!-- Header -->
+    <div class="campo-header">
+        <button class="campo-icon-btn" id="campo-close-btn" title="Fechar">✕</button>
+        <div class="campo-title">
+            <span>🦜</span>
+            <span>Modo Campo</span>
+        </div>
+        <button class="campo-icon-btn" id="campo-config-btn" title="Configurações / Exportar">⚙️</button>
+    </div>
+
+    <!-- GPS + Temp bar -->
+    <div class="campo-info-bar">
+        <span id="campo-gps-status" class="campo-gps-status">📍 Aguardando GPS…</span>
+        <span id="campo-temp-display" class="campo-temp-chip">🌡️ --</span>
+    </div>
+
+    <!-- Mini map -->
+    <div id="campo-map" class="campo-map-container"></div>
+
+    <!-- Form -->
+    <div class="campo-form">
+        <div class="campo-input-wrap">
+            <input type="text" id="campo-species-input" class="campo-species-input"
+                   placeholder="🔍 Nome da espécie (comum ou científico)…"
+                   autocomplete="off" autocorrect="off" spellcheck="false">
+            <div id="campo-autocomplete" class="campo-autocomplete-list" style="display:none;"></div>
+        </div>
+
+        <div id="campo-details" class="campo-details" style="display:none;">
+            <div class="campo-qty-row">
+                <label class="campo-field-label" for="campo-qty">👥 Indivíduos</label>
+                <input type="number" id="campo-qty" class="campo-qty-input"
+                       value="1" min="1" max="9999"
+                       inputmode="numeric" pattern="[0-9]*">
+            </div>
+            <div class="campo-vc-row">
+                <span class="campo-field-label">📋 Tipo de registro</span>
+                <div class="campo-vc-options">
+                    <label class="campo-vc-label" id="campo-vc-v-lbl">
+                        <input type="checkbox" id="campo-avistado" checked>
+                        <span class="campo-vc-ico">👁️</span>
+                        <span class="campo-vc-txt">Avistado</span>
+                    </label>
+                    <label class="campo-vc-label" id="campo-vc-c-lbl">
+                        <input type="checkbox" id="campo-canto">
+                        <span class="campo-vc-ico">🔊</span>
+                        <span class="campo-vc-txt">Canto</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <button id="campo-register-btn" class="campo-register-btn" disabled>
+            🔭 Registrar Espécie
+        </button>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="campo-bottom-bar">
+        <a href="https://merlin.allaboutbirds.org/sound-id/" target="_blank" rel="noopener"
+           class="campo-merlin-link">🎵 Merlin</a>
+        <span id="campo-counter" class="campo-counter-badge">0 registros</span>
+        <button id="campo-list-btn" class="campo-list-toggle-btn">📋 Ver Lista</button>
+    </div>
+
+    <!-- ── Config Panel (slide-up) ── -->
+    <div id="campo-config-panel" class="campo-slide-panel" style="display:none;">
+        <div class="campo-panel-header">
+            <h3>⚙️ Configurações de Campo</h3>
+            <button id="campo-config-close" class="campo-panel-x">✕</button>
+        </div>
+        <div class="campo-panel-body">
+            <button id="campo-export-xls"    class="campo-panel-btn c-green">📊 Baixar Excel (.xlsx)</button>
+            <button id="campo-export-pdf"    class="campo-panel-btn c-amber">📄 Gerar PDF</button>
+            <button id="campo-copy-table"    class="campo-panel-btn c-blue">📋 Copiar Tabela</button>
+            <hr class="campo-hr">
+            <button id="campo-import-avist"  class="campo-panel-btn c-teal">🔭 Importar para Avistamentos</button>
+            <button id="campo-clear-list"    class="campo-panel-btn c-red">🗑️ Limpar Todos os Registros</button>
+        </div>
+    </div>
+
+    <!-- ── List Panel (slide-up) ── -->
+    <div id="campo-list-panel" class="campo-slide-panel" style="display:none;">
+        <div class="campo-panel-header">
+            <h3>📋 Registros de Campo</h3>
+            <button id="campo-list-close" class="campo-panel-x">✕</button>
+        </div>
+        <div id="campo-list-content" class="campo-panel-scroll"></div>
+    </div>
+
+</div>
+<!-- ==================== FIM MODO CAMPO ==================== -->
+
 </body>
 </html>
