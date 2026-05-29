@@ -12689,6 +12689,8 @@ function closeCampo() {
         navigator.geolocation.clearWatch(campoWatchId);
         campoWatchId = null;
     }
+    if (_gpsRetryTimer) { clearTimeout(_gpsRetryTimer); _gpsRetryTimer = null; }
+    _gpsRetryCount = 0;
     hidePanels();
 }
 
@@ -12708,36 +12710,78 @@ function initCampoMap() {
 }
 
 /* ── GPS ───────────────────────────────────────── */
+var _gpsRetryTimer = null;
+var _gpsRetryCount = 0;
+
+function onGPSSuccess(pos) {
+    _gpsRetryCount = 0;
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+    var acc = Math.round(pos.coords.accuracy);
+    campoCurrentGPS = { lat: lat, lng: lng };
+    setGPSStatus('📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' (±' + acc + 'm)');
+    if (campoMap) {
+        if (campoGPSMarker) {
+            campoGPSMarker.setLatLng([lat, lng]);
+        } else {
+            campoGPSMarker = L.circleMarker([lat, lng], {
+                radius: 9, fillColor: '#1565C0', color: '#fff', weight: 2.5, fillOpacity: .9
+            }).addTo(campoMap).bindPopup('📍 Você está aqui');
+            campoMap.setView([lat, lng], 15);
+        }
+    }
+    fetchTemperature(lat, lng);
+}
+
+function onGPSError(err) {
+    var msgs = {
+        1: '📍 GPS negado — habilite nas configurações',
+        2: '📍 GPS indisponível — verifique o sinal',
+        3: '📍 Sinal GPS fraco — aguardando…'
+    };
+    setGPSStatus(msgs[err.code] || '📍 Erro GPS');
+    // Para timeout (código 3), retry automático
+    if (err.code === 3 && _gpsRetryCount < 10) {
+        _gpsRetryCount++;
+        if (_gpsRetryTimer) clearTimeout(_gpsRetryTimer);
+        _gpsRetryTimer = setTimeout(function() {
+            // Força uma leitura imediata nova
+            navigator.geolocation.getCurrentPosition(onGPSSuccess, function(){}, {
+                enableHighAccuracy: true, maximumAge: 0, timeout: 15000
+            });
+        }, 3000);
+    }
+}
+
 function startCampoGPS() {
     if (!navigator.geolocation) {
         setGPSStatus('📍 GPS não disponível neste dispositivo');
         return;
     }
-    setGPSStatus('📍 Aguardando sinal GPS…');
+    // Limpar watch anterior se existir
+    if (campoWatchId !== null) {
+        navigator.geolocation.clearWatch(campoWatchId);
+        campoWatchId = null;
+    }
+    if (_gpsRetryTimer) { clearTimeout(_gpsRetryTimer); _gpsRetryTimer = null; }
+    _gpsRetryCount = 0;
+    setGPSStatus('📍 Buscando sinal GPS…');
+
+    // 1) Leitura imediata — sem cache (maximumAge:0) para forçar posição atual
+    navigator.geolocation.getCurrentPosition(onGPSSuccess, function(err) {
+        // Se falhar a leitura imediata, não mostra erro ainda — watchPosition vai tentar
+        if (err.code !== 1) {
+            setGPSStatus('📍 Aguardando GPS…');
+        } else {
+            onGPSError(err);
+        }
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
+
+    // 2) Watch contínuo — atualiza sempre que o dispositivo mover ou GPS melhorar
     campoWatchId = navigator.geolocation.watchPosition(
-        function(pos) {
-            var lat = pos.coords.latitude;
-            var lng = pos.coords.longitude;
-            var acc = Math.round(pos.coords.accuracy);
-            campoCurrentGPS = { lat: lat, lng: lng };
-            setGPSStatus('📍 ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + ' (±' + acc + 'm)');
-            if (campoMap) {
-                if (campoGPSMarker) {
-                    campoGPSMarker.setLatLng([lat, lng]);
-                } else {
-                    campoGPSMarker = L.circleMarker([lat, lng], {
-                        radius: 9, fillColor: '#1565C0', color: '#fff', weight: 2.5, fillOpacity: .9
-                    }).addTo(campoMap).bindPopup('📍 Você está aqui');
-                    campoMap.setView([lat, lng], 15);
-                }
-            }
-            fetchTemperature(lat, lng);
-        },
-        function(err) {
-            var msgs = { 1:'📍 GPS negado — habilite nas configurações', 2:'📍 GPS indisponível', 3:'📍 Timeout GPS — tente novamente' };
-            setGPSStatus(msgs[err.code] || '📍 Erro GPS');
-        },
-        { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000 }
+        onGPSSuccess,
+        onGPSError,
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
     );
 }
 function setGPSStatus(msg) {
