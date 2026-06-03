@@ -4428,9 +4428,34 @@ function scheduleTreeUpdate() {
         rows.sort((a,b) => (w[b.iucn]||0) - (w[a.iucn]||0));
     }
 
+    const statusWeight = { 'LC':1, 'NT':2, 'VU':3, 'EN':4, 'CR':5, 'DD':0, 'NE':0 };
     rows.forEach(r => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.ordem}</td><td>${r.familia}</td><td>${r.subfamilia}</td><td>${r.scientific}</td><td>${r.common}</td><td class="status-sc status-${r.sc}">${r.sc}</td><td class="status-icmbio status-${r.icmbio}">${r.icmbio}</td><td class="status-iucn status-${r.iucn}">${r.iucn}</td>`;
+        // Calcular divergência
+        const statuses = [r.sc, r.icmbio, r.iucn].filter(s => s && s !== 'NE' && s !== 'DD');
+        const uniqueStatuses = [...new Set(statuses)];
+        const hasDivergence = uniqueStatuses.length > 1;
+        // Calcular gravidade: diferença máxima de peso entre os status válidos
+        const weights = statuses.map(s => statusWeight[s] || 0);
+        const maxDiff = weights.length > 1 ? Math.max(...weights) - Math.min(...weights) : 0;
+        let divBadge = '';
+        let trClass = '';
+        if (hasDivergence) {
+            if (maxDiff >= 3) {
+                divBadge = `<span title="Divergência crítica: diferença de ${maxDiff} categorias entre as listas" style="display:inline-flex;align-items:center;gap:4px;background:#c0392b;color:white;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;">🚨 Crítica</span>`;
+                trClass = 'divergence-critical';
+            } else if (maxDiff >= 2) {
+                divBadge = `<span title="Divergência alta: diferença de ${maxDiff} categorias" style="display:inline-flex;align-items:center;gap:4px;background:#e67e22;color:white;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;">⚠️ Alta</span>`;
+                trClass = 'divergence-high';
+            } else {
+                divBadge = `<span title="Divergência moderada entre listas" style="display:inline-flex;align-items:center;gap:4px;background:#f39c12;color:white;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;">⚡ Moderada</span>`;
+                trClass = 'divergence-moderate';
+            }
+        } else {
+            divBadge = `<span style="color:#27ae60;font-size:13px;" title="Status consistente entre as listas">✅</span>`;
+        }
+        if (trClass) tr.classList.add(trClass);
+        tr.innerHTML = `<td>${r.ordem}</td><td>${r.familia}</td><td>${r.subfamilia}</td><td><em>${r.scientific}</em></td><td>${r.common}</td><td class="status-sc status-${r.sc}">${r.sc}</td><td class="status-icmbio status-${r.icmbio}">${r.icmbio}</td><td class="status-iucn status-${r.iucn}">${r.iucn}</td><td style="text-align:center;">${divBadge}</td>`;
         conservationTableBody.appendChild(tr);
     });
 renderAllCharts(rows);
@@ -13303,3 +13328,524 @@ if (document.readyState === 'loading') {
 
 })();
 // ==================== FIM MODO CAMPO ====================
+
+// ==================== MÓDULO: BANNER OFFLINE ====================
+(function initOfflineBanner() {
+    const banner = document.getElementById('offline-banner');
+    if (!banner) return;
+
+    function showBanner() {
+        banner.style.display = 'flex';
+    }
+    function hideBanner() {
+        banner.style.display = 'none';
+    }
+
+    window.addEventListener('offline', showBanner);
+    window.addEventListener('online', hideBanner);
+
+    // Checar estado atual na carga
+    if (!navigator.onLine) {
+        showBanner();
+    }
+})();
+
+// ==================== MÓDULO: FEEDBACK EM TEMPO REAL NA IMPORTAÇÃO ====================
+(function initRealtimeImportFeedback() {
+    const textarea = document.getElementById('import-data');
+    const panel    = document.getElementById('realtime-feedback-panel');
+    const lines    = document.getElementById('realtime-feedback-lines');
+    if (!textarea || !panel || !lines) return;
+
+    let rtTimer = null;
+
+    function checkLines() {
+        const db = window.BIRD_DATABASE;
+        if (!db || !db.length) return; // banco ainda não carregado
+
+        const raw = textarea.value;
+        const lineList = raw.split('\n');
+        const nonEmpty = lineList.filter(l => l.trim() !== '');
+
+        if (nonEmpty.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+
+        let html = '';
+        nonEmpty.forEach(line => {
+            const name = line.replace(/^\d{4}-\d{2}-\d{2}\s*/, '').trim(); // remover data se houver
+            const query = name.toLowerCase();
+            const found = db.find(b =>
+                b.scientificName.toLowerCase() === query ||
+                (b.commonName && b.commonName.toLowerCase() === query)
+            );
+            // Fuzzy: contém o nome
+            const fuzzy = !found && db.find(b =>
+                b.scientificName.toLowerCase().includes(query) ||
+                (b.commonName && b.commonName.toLowerCase().includes(query))
+            );
+            const icon  = found ? '✅' : (fuzzy ? '🔶' : '❌');
+            const color = found ? '#27ae60' : (fuzzy ? '#e67e22' : '#c0392b');
+            const display = name.length > 24 ? name.slice(0, 22) + '…' : name;
+            const tooltip = found
+                ? `Reconhecido: ${found.scientificName}`
+                : (fuzzy ? `Parcial: ${fuzzy.scientificName}` : 'Não encontrado no banco');
+            html += `<div title="${tooltip}" style="display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px solid #f0f0f0;">
+                <span style="font-size:13px;">${icon}</span>
+                <span style="color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;font-size:11.5px;">${display}</span>
+            </div>`;
+        });
+        lines.innerHTML = html;
+    }
+
+    textarea.addEventListener('input', () => {
+        clearTimeout(rtTimer);
+        rtTimer = setTimeout(checkLines, 200);
+    });
+
+    // Também roda ao focar (caso o banco carregue depois do foco)
+    textarea.addEventListener('focus', () => {
+        clearTimeout(rtTimer);
+        rtTimer = setTimeout(checkLines, 300);
+    });
+})();
+
+// ==================== MÓDULO: FILTRO TAXONÔMICO GLOBAL ====================
+(function initGlobalTaxonFilter() {
+    const nivelSel  = document.getElementById('gtf-nivel');
+    const valorSel  = document.getElementById('gtf-valor');
+    const aplicarBtn = document.getElementById('gtf-aplicar');
+    const limparBtn = document.getElementById('gtf-limpar');
+    const statusEl  = document.getElementById('gtf-status');
+    const toggleBtn = document.getElementById('gtf-toggle');
+    const filterDiv = document.getElementById('global-taxon-filter');
+    if (!nivelSel || !valorSel || !aplicarBtn) return;
+
+    // Abrir/fechar painel
+    if (toggleBtn && filterDiv) {
+        toggleBtn.addEventListener('click', () => {
+            const visible = filterDiv.style.display === 'flex';
+            filterDiv.style.display = visible ? 'none' : 'flex';
+            toggleBtn.title = visible ? 'Filtro Taxonômico (OFF)' : 'Filtro Taxonômico (ON)';
+        });
+    }
+
+    // Preencher opções de valor ao mudar nível
+    nivelSel.addEventListener('change', () => {
+        const nivel = nivelSel.value;
+        valorSel.innerHTML = '<option value="">— Selecionar —</option>';
+        if (!nivel) return;
+
+        const db = window.BIRD_DATABASE;
+        if (!db || !db.length) {
+            valorSel.innerHTML = '<option value="">Banco não carregado</option>';
+            return;
+        }
+
+        const values = [...new Set(db.map(b => b[nivel]).filter(Boolean))].sort();
+        values.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = v;
+            valorSel.appendChild(opt);
+        });
+    });
+
+    // Estado atual do filtro
+    window._gtfActive = { nivel: '', valor: '' };
+
+    function applyFilter() {
+        const nivel = nivelSel.value;
+        const valor = valorSel.value;
+        window._gtfActive = { nivel, valor };
+
+        if (!nivel || !valor) {
+            clearFilter();
+            return;
+        }
+
+        const db = window.BIRD_DATABASE;
+        if (!db) return;
+
+        // Conjunto de espécies que passam no filtro
+        const allowed = new Set(
+            db.filter(b => b[nivel] === valor).map(b => b.scientificName.toLowerCase())
+        );
+
+        // Filtrar tabela principal (import-table)
+        filterTableById('species-table', allowed);
+        // Filtrar tabela de conservação
+        filterTableById('conservation-table-body', allowed, 3); // col 3 = nome científico
+        // Filtrar tabela de comparação
+        filterTableById('compare-table-body', allowed);
+        // Filtrar tabela de avistamentos
+        filterTableById('avistamentos-tbody', allowed);
+
+        const count = allowed.size;
+        if (statusEl) statusEl.textContent = `${count} espécie(s) em ${nivel}: ${valor}`;
+    }
+
+    function filterTableById(tbodyId, allowed, sciCol) {
+        const tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(tr => {
+            const cells = tr.querySelectorAll('td');
+            if (!cells.length) return;
+            // Tentar identificar o nome científico na linha
+            let sciName = '';
+            if (sciCol !== undefined && cells[sciCol]) {
+                sciName = cells[sciCol].textContent.trim().toLowerCase();
+            } else {
+                // Procurar em todas as células
+                for (let c of cells) {
+                    const t = c.textContent.trim().toLowerCase();
+                    if (window.BIRD_DATABASE && window.BIRD_DATABASE.find(b => b.scientificName.toLowerCase() === t)) {
+                        sciName = t;
+                        break;
+                    }
+                }
+            }
+            if (!sciName) return;
+            tr.style.display = allowed.has(sciName) ? '' : 'none';
+        });
+    }
+
+    function clearFilter() {
+        window._gtfActive = { nivel: '', valor: '' };
+        // Mostrar todas as linhas de todas as tabelas
+        ['species-table','conservation-table-body','compare-table-body','avistamentos-tbody'].forEach(id => {
+            const tbody = document.getElementById(id);
+            if (!tbody) return;
+            tbody.querySelectorAll('tr').forEach(tr => tr.style.display = '');
+        });
+        if (statusEl) statusEl.textContent = 'Filtro removido';
+        nivelSel.value = '';
+        valorSel.innerHTML = '<option value="">— Selecionar —</option>';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+    }
+
+    aplicarBtn.addEventListener('click', applyFilter);
+    limparBtn.addEventListener('click', clearFilter);
+    valorSel.addEventListener('change', () => {
+        if (valorSel.value) applyFilter();
+    });
+})();
+
+// ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
+(function initAcademicPDFReport() {
+    const pdfBtn = document.getElementById('report-download-pdf-btn');
+    if (!pdfBtn) return;
+
+    pdfBtn.addEventListener('click', async function() {
+        // Tentar carregar jsPDF dinamicamente se não estiver disponível
+        if (!window.jspdf) {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+            document.head.appendChild(script);
+            await new Promise(r => { script.onload = r; script.onerror = r; });
+        }
+
+        const jsPDF = window.jspdf && window.jspdf.jsPDF;
+        if (!jsPDF) {
+            alert('Não foi possível carregar a biblioteca de PDF. Verifique sua conexão e tente novamente.');
+            return;
+        }
+
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const W = 210, H = 297;
+        const margin = 18;
+        const contentW = W - margin * 2;
+        let y = 0;
+
+        // ── Funções auxiliares ──────────────────────────────────────────
+        function newPage() {
+            doc.addPage();
+            y = margin;
+            // Rodapé
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Ornitologia SC · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
+            doc.text(`Página ${doc.getNumberOfPages()}`, W - margin, H - 8, { align: 'right' });
+            doc.setTextColor(30, 30, 30);
+        }
+
+        function checkY(needed) {
+            if (y + needed > H - 20) newPage();
+        }
+
+        function sectionTitle(title, level = 1) {
+            checkY(12);
+            if (level === 1) {
+                doc.setFillColor(27, 67, 50);
+                doc.roundedRect(margin, y, contentW, 9, 2, 2, 'F');
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text(title, margin + 4, y + 6);
+                doc.setTextColor(30, 30, 30);
+                y += 13;
+            } else {
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(27, 67, 50);
+                doc.text(title, margin, y + 5);
+                doc.setDrawColor(82, 183, 136);
+                doc.line(margin, y + 7, margin + contentW, y + 7);
+                doc.setTextColor(30, 30, 30);
+                y += 11;
+            }
+        }
+
+        function bodyText(text, opts = {}) {
+            doc.setFontSize(opts.size || 9.5);
+            doc.setFont('helvetica', opts.style || 'normal');
+            doc.setTextColor(opts.color ? opts.color[0] : 40, opts.color ? opts.color[1] : 40, opts.color ? opts.color[2] : 40);
+            const wrapped = doc.splitTextToSize(text, contentW);
+            wrapped.forEach(line => {
+                checkY(6);
+                doc.text(line, margin, y);
+                y += 5.5;
+            });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(40, 40, 40);
+        }
+
+        function tableRow(cols, widths, isHeader, bgColor) {
+            checkY(7);
+            const rowH = 7;
+            if (bgColor) {
+                doc.setFillColor(...bgColor);
+                doc.rect(margin, y - 5, contentW, rowH, 'F');
+            }
+            let x = margin;
+            cols.forEach((col, i) => {
+                doc.setFontSize(isHeader ? 8 : 8);
+                doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
+                doc.setTextColor(isHeader ? 255 : 40, isHeader ? 255 : 40, isHeader ? 255 : 40);
+                const text = doc.splitTextToSize(String(col), widths[i] - 2);
+                doc.text(text[0] || '', x + 1.5, y);
+                x += widths[i];
+            });
+            doc.setTextColor(40, 40, 40);
+            doc.setFont('helvetica', 'normal');
+            y += rowH;
+        }
+
+        // ── Dados para o relatório ──────────────────────────────────────
+        const db = window.BIRD_DATABASE || [];
+        const speciesInfo = window.speciesInfo || {};
+
+        // Coletar espécies da tabela principal
+        function getImportedSpecies() {
+            const tbody = document.getElementById('species-table');
+            const rows = [];
+            if (tbody) {
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        rows.push({
+                            scientific: cells[0] ? cells[0].textContent.trim() : '',
+                            common: cells[1] ? cells[1].textContent.trim() : ''
+                        });
+                    }
+                });
+            }
+            return rows.filter(r => r.scientific);
+        }
+
+        const imported = getImportedSpecies();
+
+        // ── CAPA ────────────────────────────────────────────────────────
+        doc.setFillColor(27, 67, 50);
+        doc.rect(0, 0, W, 80, 'F');
+        doc.setFillColor(82, 183, 136);
+        doc.rect(0, 80, W, 4, 'F');
+
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text('RELATÓRIO ORNITOLÓGICO', W / 2, 28, { align: 'center' });
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Santa Catarina, Brasil', W / 2, 38, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(168, 213, 181);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`, W / 2, 50, { align: 'center' });
+        doc.text(`Total de espécies analisadas: ${imported.length}`, W / 2, 58, { align: 'center' });
+
+        doc.setFontSize(8);
+        doc.setTextColor(120, 180, 150);
+        doc.text('Ferramenta: Ornitologia SC | Baseado em CBRO (Pacheco et al. 2021)', W / 2, 70, { align: 'center' });
+
+        y = 95;
+        doc.setTextColor(40, 40, 40);
+
+        // ── SUMÁRIO ──────────────────────────────────────────────────────
+        sectionTitle('SUMÁRIO');
+        const sections = [
+            '1. Introdução',
+            '2. Lista de espécies registradas',
+            '3. Status de conservação',
+            '4. Índices de diversidade',
+            '5. Referências bibliográficas'
+        ];
+        sections.forEach((s, i) => {
+            bodyText(s);
+            y += 1;
+        });
+        y += 4;
+
+        // ── 1. INTRODUÇÃO ────────────────────────────────────────────────
+        sectionTitle('1. INTRODUÇÃO');
+        bodyText('Este relatório foi gerado automaticamente pela plataforma Ornitologia SC, uma ferramenta digital para análise e catalogação de aves com ocorrência em Santa Catarina. As análises seguem protocolos padronizados de ecologia de comunidades, com base nas listas taxonômicas e de conservação vigentes.');
+        y += 3;
+        bodyText(`Foram registradas ${imported.length} espécie(s) nesta sessão de análise. Os dados taxonômicos seguem Pacheco et al. (2021) — segunda edição do CBRO — e as listas de conservação consultadas são: Lista Vermelha de SC, Lista ICMBio (fauna ameaçada do Brasil) e Lista Vermelha IUCN (global).`);
+        y += 5;
+
+        // ── 2. LISTA DE ESPÉCIES ─────────────────────────────────────────
+        newPage();
+        sectionTitle('2. LISTA DE ESPÉCIES REGISTRADAS');
+
+        if (imported.length === 0) {
+            bodyText('Nenhuma espécie importada nesta sessão.');
+        } else {
+            const colW = [8, 74, 74, 16];
+            // Cabeçalho
+            tableRow(['#', 'Nome Científico', 'Nome Popular', 'Família'], colW, true, [27, 67, 50]);
+            imported.forEach((sp, i) => {
+                const info = speciesInfo[sp.scientific] || {};
+                const bg = i % 2 === 0 ? [245, 250, 245] : null;
+                tableRow([i + 1, sp.scientific, sp.common || info.nomePopular || '—', info.familia || '—'], colW, false, bg);
+            });
+        }
+        y += 4;
+
+        // ── 3. STATUS DE CONSERVAÇÃO ─────────────────────────────────────
+        checkY(20);
+        sectionTitle('3. STATUS DE CONSERVAÇÃO');
+        bodyText('A tabela abaixo apresenta o status de conservação de cada espécie registrada segundo as três listas consultadas, com destaque para divergências.');
+        y += 3;
+
+        const statusColors = { 'LC': [39, 174, 96], 'NT': [39, 174, 96], 'VU': [230, 126, 34], 'EN': [231, 76, 60], 'CR': [192, 57, 43], 'DD': [150, 150, 150], 'NE': [200, 200, 200] };
+        const statusWeight2 = { 'LC':1, 'NT':2, 'VU':3, 'EN':4, 'CR':5, 'DD':0, 'NE':0 };
+
+        if (imported.length === 0) {
+            bodyText('Sem dados para exibir.');
+        } else {
+            const colW2 = [60, 28, 22, 22, 22, 18];
+            tableRow(['Nome Científico', 'Nome Popular', 'SC', 'ICMBio', 'IUCN', 'Div.'], colW2, true, [27, 67, 50]);
+            imported.forEach((sp, i) => {
+                const info = speciesInfo[sp.scientific] || {};
+                const sc = info.sc || 'NE', icm = info.icmbio || 'NE', iucn = info.iucn || 'NE';
+                const stats = [sc, icm, iucn].filter(s => s !== 'NE' && s !== 'DD');
+                const unique = [...new Set(stats)];
+                const hasDiverg = unique.length > 1;
+                const maxDiff = hasDiverg ? Math.max(...stats.map(s => statusWeight2[s]||0)) - Math.min(...stats.map(s => statusWeight2[s]||0)) : 0;
+                const divLabel = !hasDiverg ? '✓' : maxDiff >= 3 ? '!!!' : maxDiff >= 2 ? '!!' : '!';
+                const bg = i % 2 === 0 ? [245, 250, 245] : null;
+                tableRow([sp.scientific, info.nomePopular || '—', sc, icm, iucn, divLabel], colW2, false, bg);
+            });
+        }
+
+        // Contagem de divergências
+        y += 4;
+        const conservRows = imported.map(sp => {
+            const info = speciesInfo[sp.scientific] || {};
+            return { sc: info.sc||'NE', icmbio: info.icmbio||'NE', iucn: info.iucn||'NE' };
+        });
+        const criticals = conservRows.filter(r => {
+            const s = [r.sc, r.icmbio, r.iucn].filter(x => x !== 'NE' && x !== 'DD');
+            const w = s.map(x => statusWeight2[x]||0);
+            return [...new Set(s)].length > 1 && (Math.max(...w) - Math.min(...w)) >= 3;
+        });
+        if (criticals.length > 0) {
+            bodyText(`⚠️ ${criticals.length} espécie(s) apresentam divergência crítica (≥3 categorias) entre as listas. Recomenda-se análise cuidadosa antes de uso em documentos oficiais.`, { color: [192, 57, 43], style: 'bold' });
+        }
+
+        // ── 4. ÍNDICES DE DIVERSIDADE ─────────────────────────────────────
+        newPage();
+        sectionTitle('4. ÍNDICES DE DIVERSIDADE');
+
+        // Tentar capturar valores do painel de diversidade
+        function getDiversityValue(id) {
+            const el = document.getElementById(id);
+            return el ? el.textContent.trim() : '—';
+        }
+
+        const shannonVal = getDiversityValue('shannon-value') || getDiversityValue('result-shannon');
+        const simpsonVal = getDiversityValue('simpson-value') || getDiversityValue('result-simpson');
+        const pielouVal  = getDiversityValue('pielou-value')  || getDiversityValue('result-pielou');
+        const chao2Val   = getDiversityValue('chao2-value')   || getDiversityValue('result-chao2');
+        const richness   = imported.length;
+
+        const divData = [
+            ['Riqueza observada (S)', richness, 'Número total de espécies registradas'],
+            ['Índice de Shannon (H\')', shannonVal, 'Diversidade considerando riqueza e equitabilidade'],
+            ['Índice de Simpson (1-D)', simpsonVal, 'Probabilidade de dois indivíduos serem de espécies diferentes'],
+            ['Equitabilidade de Pielou (J\')', pielouVal, 'Distribuição da abundância entre espécies (0–1)'],
+            ['Estimativa Chao2', chao2Val, 'Riqueza total estimada com base em singletons']
+        ];
+
+        const colW3 = [52, 20, 100];
+        tableRow(['Índice', 'Valor', 'Interpretação'], colW3, true, [27, 67, 50]);
+        divData.forEach((row, i) => {
+            const bg = i % 2 === 0 ? [245, 250, 245] : null;
+            tableRow(row, colW3, false, bg);
+        });
+
+        y += 6;
+        bodyText('Referências metodológicas: Shannon (1948), Simpson (1949), Pielou (1966), Chao (1984), Hurlbert (1971).');
+
+        // ── 5. REFERÊNCIAS ───────────────────────────────────────────────
+        newPage();
+        sectionTitle('5. REFERÊNCIAS BIBLIOGRÁFICAS');
+
+        const refs = [
+            'Chao, A. (1984). Non-parametric estimation of the number of classes. Scandinavian Journal of Statistics, 11(4):265–270.',
+            'Clements, J.F., Rasmussen, P.C., Schulenberg, T.S., Iliff, M.J., Fredericks, T.A., Gerbracht, J.A., Lepage, D., Spencer, A., Billerman, S.M., Sullivan, B.L., Smith, M. & Wood, C.L. (2024). The eBird/Clements checklist of Birds of the World: v2024. Cornell Lab of Ornithology. Disponível em: https://www.birds.cornell.edu/clementschecklist/download/',
+            'Hackett, S.J. et al. (2008). A Phylogenomic Study of Birds Reveals Their Evolutionary History. Science, 320(5884):1763–1768. DOI: 10.1126/science.1157704',
+            'Hurlbert, S.H. (1971). The nonconcept of species diversity: a critique and alternative parameters. Ecology, 52(4):577–586. DOI: 10.2307/1934145',
+            'Jaccard, P. (1912). The distribution of the flora in the alpine zone. New Phytologist, 11(2):37–50.',
+            'Jarvis, E.D. et al. (2014). Whole-genome analyses resolve early branches in the tree of life of modern birds. Science, 346(6215):1320–1331. DOI: 10.1126/science.1253451',
+            'Karr, J.R. (1981). Assessment of biotic integrity using fish communities. Fisheries, 6(6):21–27. DOI: 10.1577/1548-8446(1981)006<0021:AOBIUF>2.0.CO;2',
+            'Magurran, A.E. & Henderson, P.A. (2003). Explaining the excess of rare species in natural species abundance distributions. Nature, 422(6933):714–716. DOI: 10.1038/nature01547',
+            'Pacheco, J.F., Silveira, L.F., Aleixo, A. et al. (2021). Annotated checklist of the birds of Brazil by the Brazilian Ornithological Records Committee — second edition. Ornithology Research, 29:269–313. DOI: 10.1007/s43388-021-00058-x',
+            'Piacentini, V.Q. et al. (2015). Annotated checklist of the birds of Brazil by the Brazilian Ornithological Records Committee. Revista Brasileira de Ornitologia, 23(2):91–298.',
+            'Pielou, E.C. (1966). The measurement of diversity in different types of biological collections. Journal of Theoretical Biology, 13:131–144.',
+            'Prum, R.O. et al. (2015). A comprehensive phylogeny of birds (Aves) using targeted next-generation DNA sequencing. Nature, 526(7574):569–573. DOI: 10.1038/nature15697',
+            'Sekercioglu, C.H., Ehrlich, P.R. & Daily, G.C. (2004). Ecosystem consequences of bird declines. Proceedings of the National Academy of Sciences USA, 101(52):18042–18047.',
+            'Shannon, C.E. (1948). A mathematical theory of communication. Bell System Technical Journal, 27:379–423.',
+            'Simpson, E.H. (1949). Measurement of diversity. Nature, 163:688.',
+            'Stouffer, P.C. & Bierregaard, R.O. (1995). Use of Amazonian forest fragments by understory insectivorous birds. Ecology, 76(8):2429–2445.'
+        ];
+
+        refs.forEach((ref, i) => {
+            checkY(14);
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(40, 40, 40);
+            const wrapped = doc.splitTextToSize(ref, contentW - 4);
+            doc.text(wrapped, margin + 4, y);
+            y += wrapped.length * 5 + 3;
+        });
+
+        // ── Rodapé da última página ──────────────────────────────────────
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        const lastPage = doc.getNumberOfPages();
+        for (let p = 1; p <= lastPage; p++) {
+            doc.setPage(p);
+            if (p > 1) {
+                doc.text(`Ornitologia SC · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
+                doc.text(`Página ${p} de ${lastPage}`, W - margin, H - 8, { align: 'right' });
+            }
+        }
+
+        doc.save(`relatorio_ornitologia_SC_${new Date().toISOString().slice(0, 10)}.pdf`);
+    });
+})();
