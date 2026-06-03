@@ -1466,6 +1466,9 @@ function findBirdByNormalizedName(input) {
             };
         });
 
+        // Expor speciesInfo globalmente para acesso pelo módulo de PDF
+        window.speciesInfo = speciesInfo;
+
         // Construir BIRD_DATABASE a partir de speciesInfo
         // CORRIGIDO: exposto globalmente via window para ser acessível em outros <script>
         window.BIRD_DATABASE = [];
@@ -13413,8 +13416,9 @@ if (document.readyState === 'loading') {
     });
 })();
 
-// ==================== MÓDULO: FILTRO TAXONÔMICO GLOBAL ====================
+// ==================== MÓDULO: FILTRO TAXONÔMICO GLOBAL (REMOVIDO) ====================
 (function initGlobalTaxonFilter() {
+    return; // Filtro removido
     const nivelSel  = document.getElementById('gtf-nivel');
     const valorSel  = document.getElementById('gtf-valor');
     const aplicarBtn = document.getElementById('gtf-aplicar');
@@ -13639,22 +13643,26 @@ if (document.readyState === 'loading') {
         const db = window.BIRD_DATABASE || [];
         const speciesInfo = window.speciesInfo || {};
 
-        // Coletar espécies da tabela principal
+        // Coletar espécies da tabela principal (lê os inputs data-field do #table-body)
         function getImportedSpecies() {
-            const tbody = document.getElementById('species-table');
+            const tbody = document.getElementById('table-body');
             const rows = [];
             if (tbody) {
                 tbody.querySelectorAll('tr').forEach(tr => {
-                    const cells = tr.querySelectorAll('td');
-                    if (cells.length >= 2) {
+                    const inputs = tr.querySelectorAll('input[data-field]');
+                    const rowData = {};
+                    inputs.forEach(inp => { rowData[inp.dataset.field] = inp.value.trim(); });
+                    if (rowData.generoEspecie) {
+                        const sci = rowData.generoEspecie;
+                        const info = (window.speciesInfo && window.speciesInfo[sci]) || {};
                         rows.push({
-                            scientific: cells[0] ? cells[0].textContent.trim() : '',
-                            common: cells[1] ? cells[1].textContent.trim() : ''
+                            scientific: sci,
+                            common: info.nomePopular || ''
                         });
                     }
                 });
             }
-            return rows.filter(r => r.scientific);
+            return rows;
         }
 
         const imported = getImportedSpecies();
