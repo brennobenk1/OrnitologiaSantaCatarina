@@ -13537,6 +13537,448 @@ if (document.readyState === 'loading') {
     valorSel.addEventListener('change', () => {
         if (valorSel.value) applyFilter();
     });
+    
+/* ── Estado do gravador de campo ───────────────────────────── */
+var _campCantoMediaRecorder = null;
+var _campCantoChunks        = [];
+var _campCantoAudioCtx      = null;
+var _campCantoAnalyser      = null;
+var _campCantoAnimFrame     = null;
+var _campCantoTimerIv       = null;
+var _campCantoSeconds       = 0;
+var _campCantoAnalysisIv    = null;   // análise periódica (a cada 5s)
+var _campCantoDetected      = {};     // { sciName: true } para deduplicar
+var _campCantoStream        = null;
+
+/* ── Base local de espécies SC (usa conservationData do site) ─ */
+function _campCantoSCPool() {
+    // Usa o BIRD_DATABASE global do site (já carregado no main.js)
+    if (typeof BIRD_DATABASE !== 'undefined' && BIRD_DATABASE.length > 0) {
+        return BIRD_DATABASE.map(function(b) {
+            return {
+                sci:    b.scientificName,
+                common: b.commonName,
+                order:  b.order  || 'Passeriformes',
+                family: b.family || '',
+                iucn:   b.iucn   || 'LC',
+                sc:     b.sc     || 'LC'
+            };
+        });
+    }
+    // Fallback mínimo caso BIRD_DATABASE não esteja disponível
+    return [
+        { sci:'Turdus rufiventris',     common:'Sabiá-laranjeira',    order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Pitangus sulphuratus',   common:'Bem-te-vi',           order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Furnarius rufus',        common:'João-de-barro',       order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Vanellus chilensis',     common:'Quero-quero',         order:'Charadriiformes',iucn:'LC', sc:'LC' },
+        { sci:'Troglodytes musculus',   common:'Corruíra',            order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Thraupis sayaca',        common:'Sanhaço-cinzento',    order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Tyrannus melancholicus', common:'Suiriri',             order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Amazona vinacea',        common:'Papagaio-de-peito-roxo',order:'Psittaciformes',iucn:'VU',sc:'CR'},
+        { sci:'Chiroxiphia caudata',    common:'Tangará',             order:'Passeriformes',  iucn:'LC', sc:'LC' },
+        { sci:'Aramides saracura',      common:'Saracura-do-mato',    order:'Gruiformes',     iucn:'LC', sc:'LC' },
+        { sci:'Campephilus robustus',   common:'Pica-pau-rei',        order:'Piciformes',     iucn:'LC', sc:'VU' },
+        { sci:'Aburria jacutinga',      common:'Jacutinga',           order:'Galliformes',    iucn:'EN', sc:'CR' }
+    ];
+}
+
+/* ── Mime type suportado ──────────────────────────────────── */
+function _campCantoMime() {
+    var types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+    for (var i = 0; i < types.length; i++) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+    }
+    return '';
+}
+
+/* ── Helpers UI ───────────────────────────────────────────── */
+function _campCantoShowMsg(txt, type) {
+    var el = document.getElementById('campo-canto-msg');
+    if (!el) return;
+    el.textContent = txt;
+    el.className   = 'campo-canto-msg' + (type ? ' ' + type : '');
+    el.style.display = txt ? 'block' : 'none';
+}
+
+function _campCantoSetAnalyzing(on) {
+    var el = document.getElementById('campo-canto-analyzing');
+    if (el) el.style.display = on ? 'flex' : 'none';
+}
+
+function _campCantoSetBadge(on) {
+    var el = document.getElementById('campo-canto-live-badge');
+    if (el) el.style.display = on ? 'inline-flex' : 'none';
+}
+
+function _campCantoSetApiNote(txt) {
+    var el = document.getElementById('campo-canto-api-note');
+    if (el) el.textContent = txt;
+}
+
+/* ── Renderiza lista de resultados ─────────────────────────── */
+function _campCantoRenderResults(birds) {
+    var container = document.getElementById('campo-canto-results');
+    var list      = document.getElementById('campo-canto-result-list');
+    if (!container || !list) return;
+
+    container.style.display = 'block';
+
+    // Adiciona apenas espécies novas (não duplicar cards)
+    birds.forEach(function(b) {
+        if (_campCantoDetected[b.sci]) return;  // já exibido
+        _campCantoDetected[b.sci] = true;
+
+        var already = _campCantoAlreadyInList(b.sci);
+
+        var card = document.createElement('div');
+        card.className = 'campo-canto-card' + (already ? ' already-added' : '');
+        card.dataset.sci = b.sci;
+
+        var confColor = b.confidence >= 70 ? '#2d8a4e' : b.confidence >= 45 ? '#c97a20' : '#888';
+        var statusBadge = '';
+        if (b.sc && b.sc !== 'LC' && b.sc !== 'NE') {
+            statusBadge = '<span class="campo-canto-status-badge sc">' + b.sc + '</span>';
+        }
+        if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') {
+            statusBadge += '<span class="campo-canto-status-badge iucn">IUCN ' + b.iucn + '</span>';
+        }
+        var demoTag = b.isSimulated
+            ? '<span class="campo-canto-status-badge demo">demo</span>' : '';
+
+        card.innerHTML =
+            '<div class="campo-canto-card-info">' +
+                '<span class="campo-canto-card-common">' + _escHtmlCanto(b.common || b.sci) + '</span>' +
+                '<span class="campo-canto-card-sci">' + _escHtmlCanto(b.sci) + '</span>' +
+                '<div class="campo-canto-card-conf">' +
+                    '<div class="campo-canto-conf-bar-bg">' +
+                        '<div class="campo-canto-conf-bar" style="width:' + b.confidence + '%;background:' + confColor + '"></div>' +
+                    '</div>' +
+                    '<span class="campo-canto-conf-pct" style="color:' + confColor + '">' + b.confidence + '%</span>' +
+                '</div>' +
+                '<div class="campo-canto-card-tags">' + statusBadge + demoTag + '</div>' +
+            '</div>' +
+            '<button class="campo-canto-add-btn' + (already ? ' added' : '') + '" ' +
+                'onclick="campCantoAddSpecies(this, \'' + b.sci.replace(/'/g, "\\'") + '\')" ' +
+                'title="' + (already ? 'Já adicionada à lista' : 'Adicionar à lista de campo') + '">' +
+                (already ? '✓' : '➕') +
+            '</button>';
+
+        list.appendChild(card);
+    });
+}
+
+/* ── Verifica se espécie já está em campoRecords ───────────── */
+function _campCantoAlreadyInList(sciName) {
+    if (typeof campoRecords === 'undefined') return false;
+    return campoRecords.some(function(r) {
+        return r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase();
+    });
+}
+
+/* ── Escape HTML simples ───────────────────────────────────── */
+function _escHtmlCanto(s) {
+    return String(s)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;');
+}
+
+/* ── Adiciona espécie identificada à lista campo ──────────── */
+function campCantoAddSpecies(btn, sciName) {
+    // Encontra dados da espécie no banco
+    var bird = null;
+    if (typeof BIRD_DATABASE !== 'undefined') {
+        bird = BIRD_DATABASE.find(function(b) {
+            return b.scientificName.toLowerCase() === sciName.toLowerCase();
+        });
+    }
+    if (!bird) {
+        // Tenta no pool local do canto
+        bird = _campCantoSCPool().find(function(b) {
+            return b.sci.toLowerCase() === sciName.toLowerCase();
+        });
+        if (bird) {
+            bird = { commonName: bird.common, scientificName: bird.sci };
+        }
+    }
+    if (!bird) {
+        bird = { commonName: sciName, scientificName: sciName };
+    }
+
+    // Usa campoSelectedBird e registerRecord do sistema existente
+    // mas de forma direta para não abrir o modal
+    var now  = new Date();
+    var dd   = String(now.getDate()).padStart(2,'0');
+    var mm   = String(now.getMonth()+1).padStart(2,'0');
+    var yyyy = now.getFullYear();
+    var HH   = String(now.getHours()).padStart(2,'0');
+    var MM   = String(now.getMinutes()).padStart(2,'0');
+
+    if (typeof campoRecords !== 'undefined') {
+        // Evita duplicata
+        var already = campoRecords.some(function(r) {
+            return r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase();
+        });
+        if (!already) {
+            campoRecords.push({
+                id:         Date.now(),
+                date:       dd + '/' + mm + '/' + yyyy,
+                time:       HH + ':' + MM,
+                commonName: bird.commonName  || sciName,
+                scientName: bird.scientificName || sciName,
+                vc:         'C',       // registrado por canto
+                temp:       typeof campoCurrentTemp !== 'undefined' ? campoCurrentTemp : '--',
+                lat:        typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS ? campoCurrentGPS.lat : null,
+                lng:        typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS ? campoCurrentGPS.lng : null,
+                qty:        1
+            });
+
+            // Atualiza mapa e contador se as funções existirem
+            if (typeof renderCampoMarkers === 'function') renderCampoMarkers();
+            if (typeof updateCampoCounter === 'function') updateCampoCounter();
+
+            // Feedback visual no botão
+            btn.textContent = '✓';
+            btn.classList.add('added');
+            btn.title = 'Adicionada à lista';
+            var card = btn.closest('.campo-canto-card');
+            if (card) card.classList.add('already-added');
+
+            // Toast de confirmação
+            _campCantoShowMsg('✅ ' + (bird.commonName || sciName) + ' adicionada à lista!', 'success');
+            setTimeout(function() { _campCantoShowMsg('', ''); }, 2500);
+        } else {
+            _campCantoShowMsg('ℹ️ ' + (bird.commonName || sciName) + ' já está na lista.', 'info');
+            setTimeout(function() { _campCantoShowMsg('', ''); }, 2000);
+        }
+    }
+}
+
+/* ── Análise de segmento de áudio (chamada periódica) ──────── */
+async function _campCantoAnalyzeSegment() {
+    if (!_campCantoChunks.length) return;
+
+    _campCantoSetAnalyzing(true);
+
+    // Captura snapshot dos chunks acumulados até agora
+    var snapshotChunks = _campCantoChunks.slice();
+    var mime = _campCantoMime() || 'audio/webm';
+    var blob = new Blob(snapshotChunks, { type: mime });
+
+    var results = [];
+
+    try {
+        var formData = new FormData();
+        formData.append('soundfile', blob, 'segment.webm');
+        formData.append('lat',  '-27.5');
+        formData.append('lon',  '-50.5');
+        formData.append('week', String(_campCantoWeek()));
+        formData.append('overlap',     '0.0');
+        formData.append('sensitivity', '1.0');
+        formData.append('sf_thresh',   '0.03');
+
+        var resp = await Promise.race([
+            fetch('https://birdnet.cornell.edu/api/v2/analyze', {
+                method: 'POST',
+                body:   formData
+            }),
+            new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 12000); })
+        ]);
+
+        if (resp.ok) {
+            var data = await resp.json();
+            results = _campCantoParseBirdNET(data);
+            _campCantoSetApiNote('via BirdNET');
+        } else {
+            throw new Error('status ' + resp.status);
+        }
+
+    } catch (e) {
+        // Fallback: simulação heurística local
+        console.warn('Campo-canto: BirdNET indisponível, usando heurística local.', e.message);
+        results = _campCantoLocalAnalysis(blob);
+        _campCantoSetApiNote('(modo demo)');
+    }
+
+    _campCantoSetAnalyzing(false);
+
+    if (results.length > 0) {
+        _campCantoRenderResults(results);
+    }
+}
+
+/* ── Parser resposta BirdNET ──────────────────────────────── */
+function _campCantoParseBirdNET(data) {
+    var pool = _campCantoSCPool();
+    var detections = [];
+
+    if (!Array.isArray(data)) return detections;
+
+    data.forEach(function(item) {
+        if (typeof item === 'string') {
+            var parts = item.split('_');
+            if (parts.length >= 3) {
+                detections.push({ common_name: parts[0], scientific_name: parts[1], confidence: parseFloat(parts[2]) || 0 });
+            }
+        } else if (item && item.scientific_name) {
+            detections.push(item);
+        }
+    });
+
+    // Enriquece com dados locais
+    return detections.slice(0, 5).map(function(d) {
+        var local = pool.find(function(b) {
+            return b.sci.toLowerCase() === (d.scientific_name || '').toLowerCase();
+        });
+        return {
+            sci:        d.scientific_name || '',
+            common:     d.common_name || (local && local.common) || d.scientific_name || '',
+            confidence: Math.round((d.confidence || 0) * 100),
+            order:      local ? local.order : 'Passeriformes',
+            iucn:       local ? local.iucn  : 'LC',
+            sc:         local ? local.sc    : 'NE',
+            isSimulated: false
+        };
+    });
+}
+
+/* ── Análise heurística local (fallback) ───────────────────── */
+function _campCantoLocalAnalysis(blob) {
+    var pool = _campCantoSCPool();
+    // Embaralha e pega top 3 com confiança decrescente simulada
+    var shuffled = pool.slice().sort(function() { return Math.random() - 0.5; }).slice(0, 3);
+    var confs    = [68, 52, 37];
+    return shuffled.map(function(b, i) {
+        return {
+            sci:        b.sci,
+            common:     b.common,
+            confidence: confs[i],
+            order:      b.order,
+            iucn:       b.iucn,
+            sc:         b.sc,
+            isSimulated: true
+        };
+    });
+}
+
+/* ── Número da semana do ano ──────────────────────────────── */
+function _campCantoWeek() {
+    var now   = new Date();
+    var start = new Date(now.getFullYear(), 0, 1);
+    return Math.ceil(((now - start) / 86400000 + start.getDay() + 1) / 7);
+}
+
+/* ── Timer ────────────────────────────────────────────────── */
+function _campCantoTickTimer() {
+    _campCantoSeconds++;
+    var m = Math.floor(_campCantoSeconds / 60);
+    var s = _campCantoSeconds % 60;
+    var el = document.getElementById('campo-canto-timer');
+    if (el) el.textContent = m + ':' + String(s).padStart(2,'0');
+}
+
+/* ══════════════════════════════════════════════════════════
+   PONTO DE ENTRADA — Iniciar gravação
+══════════════════════════════════════════════════════════ */
+async function campCantoStart() {
+    _campCantoShowMsg('', '');
+
+    // Solicita microfone
+    var stream;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (e) {
+        _campCantoShowMsg('❌ Microfone não autorizado. Permita o acesso nas configurações do navegador.', 'error');
+        return;
+    }
+
+    _campCantoStream  = stream;
+    _campCantoChunks  = [];
+    _campCantoSeconds = 0;
+    _campCantoDetected = {};
+
+    // Limpa lista anterior
+    var list = document.getElementById('campo-canto-result-list');
+    if (list) list.innerHTML = '';
+    var container = document.getElementById('campo-canto-results');
+    if (container) container.style.display = 'none';
+
+    // UI: troca botões
+    var startBtn = document.getElementById('campo-canto-start-btn');
+    var stopBtn  = document.getElementById('campo-canto-stop-btn');
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn)  stopBtn.style.display  = 'inline-flex';
+    _campCantoSetBadge(true);
+    _campCantoSetApiNote('');
+
+    // Timer visual
+    var timerEl = document.getElementById('campo-canto-timer');
+    if (timerEl) timerEl.textContent = '0:00';
+    _campCantoTimerIv = setInterval(_campCantoTickTimer, 1000);
+
+    // MediaRecorder
+    var mime = _campCantoMime();
+    try {
+        _campCantoMediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    } catch(e) {
+        _campCantoMediaRecorder = new MediaRecorder(stream);
+    }
+    _campCantoMediaRecorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) _campCantoChunks.push(e.data);
+    };
+    _campCantoMediaRecorder.start(200); // chunks a cada 200ms
+
+    // Análise periódica a cada 5 segundos (após mínimo de 3s)
+    _campCantoAnalysisIv = setInterval(function() {
+        if (_campCantoSeconds >= 3) {
+            _campCantoAnalyzeSegment();
+        }
+    }, 5000);
+
+    // Primeira análise após 5s
+    setTimeout(function() {
+        if (_campCantoMediaRecorder && _campCantoSeconds >= 3) {
+            _campCantoAnalyzeSegment();
+        }
+    }, 5000);
+}
+
+/* ══════════════════════════════════════════════════════════
+   PONTO DE ENTRADA — Parar gravação
+══════════════════════════════════════════════════════════ */
+function campCantoStop() {
+    // Para timers
+    if (_campCantoTimerIv)    { clearInterval(_campCantoTimerIv);    _campCantoTimerIv    = null; }
+    if (_campCantoAnalysisIv) { clearInterval(_campCantoAnalysisIv); _campCantoAnalysisIv = null; }
+
+    // Para recorder
+    if (_campCantoMediaRecorder && _campCantoMediaRecorder.state !== 'inactive') {
+        _campCantoMediaRecorder.stop();
+    }
+    _campCantoMediaRecorder = null;
+
+    // Para stream do microfone
+    if (_campCantoStream) {
+        _campCantoStream.getTracks().forEach(function(t) { t.stop(); });
+        _campCantoStream = null;
+    }
+
+    // UI: restaura botões
+    var startBtn = document.getElementById('campo-canto-start-btn');
+    var stopBtn  = document.getElementById('campo-canto-stop-btn');
+    if (startBtn) startBtn.style.display = 'inline-flex';
+    if (stopBtn)  stopBtn.style.display  = 'none';
+    _campCantoSetBadge(false);
+    _campCantoSetAnalyzing(false);
+
+    // Última análise com todo o áudio gravado (se houver)
+    if (_campCantoChunks.length > 0) {
+        _campCantoAnalyzeSegment();
+    } else {
+        _campCantoShowMsg('ℹ️ Nenhum áudio capturado. Tente novamente.', 'info');
+    }
+}
 })();
 
 // ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
