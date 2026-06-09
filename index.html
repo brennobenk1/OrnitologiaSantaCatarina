@@ -1881,6 +1881,56 @@
     <!-- Mini map -->
     <div id="campo-map" class="campo-map-container"></div>
 
+    <!-- ── Identificador de Canto (inline no Modo Campo) ── -->
+    <div id="campo-canto-id-panel" class="campo-canto-id-panel">
+
+        <!-- Cabeçalho colapsável -->
+        <div class="campo-canto-id-header" id="campo-canto-id-toggle">
+            <span class="campo-canto-id-title">🎵 Identificar pelo Canto</span>
+            <span class="campo-canto-id-chevron" id="campo-canto-id-chevron">▼</span>
+        </div>
+
+        <!-- Corpo (colapsável) -->
+        <div id="campo-canto-id-body" class="campo-canto-id-body">
+
+            <!-- Zona de waveform -->
+            <div id="campo-canto-waveform" class="campo-canto-waveform">
+                <canvas id="campo-canto-canvas"></canvas>
+                <div class="campo-canto-waveform-info">
+                    <span id="campo-canto-timer" class="campo-canto-timer">0:00</span>
+                    <span id="campo-canto-status" class="campo-canto-hint">Pressione ⏺ para gravar</span>
+                </div>
+            </div>
+
+            <!-- Controles -->
+            <div class="campo-canto-controls">
+                <button id="campo-canto-start-btn" class="campo-canto-btn campo-canto-btn-rec" onclick="campCantoStart()">
+                    ⏺ Gravar
+                </button>
+                <button id="campo-canto-stop-btn" class="campo-canto-btn campo-canto-btn-stop" onclick="campCantoStop()" style="display:none;">
+                    ⏹ Parar
+                </button>
+                <span id="campo-canto-live-badge" class="campo-canto-live-badge" style="display:none;">🔴 Ao vivo</span>
+            </div>
+
+            <!-- Resultados em tempo real -->
+            <div id="campo-canto-results" class="campo-canto-results" style="display:none;">
+                <div class="campo-canto-results-label">🦜 Espécies detectadas <span id="campo-canto-api-note" class="campo-canto-api-note"></span></div>
+                <div id="campo-canto-result-list" class="campo-canto-result-list"></div>
+            </div>
+
+            <!-- Spinner de análise -->
+            <div id="campo-canto-analyzing" class="campo-canto-analyzing" style="display:none;">
+                <div class="campo-canto-spin"></div>
+                <span>Analisando canto…</span>
+            </div>
+
+            <!-- Mensagem -->
+            <div id="campo-canto-msg" class="campo-canto-msg" style="display:none;"></div>
+
+        </div>
+    </div>
+
     <!-- Form simplificado: só botão principal -->
     <div class="campo-form">
         <button id="campo-register-btn" class="campo-register-btn">
