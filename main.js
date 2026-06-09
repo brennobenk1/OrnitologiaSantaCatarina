@@ -14299,3 +14299,6 @@ function campCantoStop() {
         doc.save(`relatorio_ornitologia_SC_${new Date().toISOString().slice(0, 10)}.pdf`);
     });
 })();
+// Garantir que as funções do identificador de canto estejam no escopo global
+window.campCantoStart = campCantoStart;
+window.campCantoStop = campCantoStop;
