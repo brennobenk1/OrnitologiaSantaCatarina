@@ -10,10 +10,10 @@
       var getDv = function(u){ return /Mobi|Android|iPhone|iPad/.test(u)?"Mobile":"Desktop"; };
       var cidade = "", pais = "";
       try {
-        var g = await fetch("https://ip-api.com/json/?fields=city,country&lang=pt-BR");
-        var j = await g.json();
-        cidade = j.city || ""; pais = j.country || "";
-      } catch(e) {}
+  var g = await fetch("https://ipapi.co/json/");
+  var j = await g.json();
+  cidade = j.city || ""; pais = j.country_name || "";
+} catch(e) {}
       var dados = {
         timestamp:   new Date().toISOString(),
         os:          getOS(ua),
@@ -13537,7 +13537,9 @@ if (document.readyState === 'loading') {
     valorSel.addEventListener('change', () => {
         if (valorSel.value) applyFilter();
     });
-    
+
+
+
 /* ── Estado do gravador de campo ───────────────────────────── */
 var _campCantoMediaRecorder = null;
 var _campCantoChunks        = [];
