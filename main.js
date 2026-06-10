@@ -13888,7 +13888,7 @@ if (document.readyState === 'loading') {
             for (let bird of shuffled) {
                 // Confiança baseada na pontuação da ordem + variação aleatória controlada
                 const noise = (Math.random() - 0.5) * 0.15; // ±7.5%
-                const conf  = Math.round(Math.min(95, Math.max(20, (score + noise) * 100));
+                const conf  = Math.round(Math.min(95, Math.max(20, (score + noise) * 100)));
                 candidates.push({
                     sci:        bird.scientificName,
                     common:     bird.commonName,
