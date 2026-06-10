@@ -13539,6 +13539,7 @@ if (document.readyState === 'loading') {
     });
 
 
+})();
 
 // ==================== GRAVADOR DE CANTO (MODO CAMPO) CORRIGIDO ====================
 (function() {
@@ -13954,7 +13955,6 @@ if (document.readyState === 'loading') {
     }
 })();
 // ==================== FIM GRAVADOR DE CANTO ====================
-})();
 
 // ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
 (function initAcademicPDFReport() {
