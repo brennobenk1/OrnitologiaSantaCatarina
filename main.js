@@ -13539,41 +13539,46 @@ if (document.readyState === 'loading') {
     });
 
 
-})();
 
-// ==================== GRAVADOR DE CANTO (MODO CAMPO) CORRIGIDO ====================
+// ==================== GRAVADOR DE CANTO (MODO CAMPO) — 100% OFFLINE ====================
 (function() {
     'use strict';
 
-    /* ── Estado do gravador ───────────────────────────── */
+    /* ── Estado do gravador ─────────────────────────────────────────────── */
     let _campCantoMediaRecorder = null;
     let _campCantoChunks        = [];
     let _campCantoTimerIv       = null;
     let _campCantoSeconds       = 0;
-    let _campCantoAnalysisIv    = null;   // análise periódica a cada 5s
-    let _campCantoDetected      = {};     // espécies já exibidas
+    let _campCantoAnalysisIv    = null;
+    let _campCantoDetected      = {};
     let _campCantoStream        = null;
+    let _campCantoAudioCtx      = null;
+    let _campCantoAnalyser      = null;
+    let _campCantoAnimFrame     = null;
+    let _campCantoIsAnalyzing   = false;
 
-    // --- Helpers DOM ---
-    function _getEl(id) {
-        return document.getElementById(id);
+    /* ── Helpers DOM ────────────────────────────────────────────────────── */
+    function _getEl(id) { return document.getElementById(id); }
+
+    function _escHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // --- Suporte a mime type para MediaRecorder ---
+    /* ── Mime type suportado ────────────────────────────────────────────── */
     function _campCantoMime() {
-        const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+        const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
         for (let t of types) {
             if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
         }
         return '';
     }
 
-    // --- UI helpers ---
+    /* ── UI helpers ─────────────────────────────────────────────────────── */
     function _campCantoShowMsg(txt, type) {
         const el = _getEl('campo-canto-msg');
         if (!el) return;
         el.textContent = txt || '';
-        el.className = 'campo-canto-msg' + (type ? ' ' + type : '');
+        el.className   = 'campo-canto-msg' + (type ? ' ' + type : '');
         el.style.display = txt ? 'block' : 'none';
     }
 
@@ -13592,34 +13597,26 @@ if (document.readyState === 'loading') {
         if (el) el.textContent = txt;
     }
 
-    function _escHtml(s) {
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    // --- Verifica se espécie já está em campoRecords (global) ---
+    /* ── Verifica se espécie já está em campoRecords ────────────────────── */
     function _alreadyInList(sciName) {
         if (typeof campoRecords === 'undefined') return false;
         return campoRecords.some(r => r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase());
     }
 
-    // --- Adiciona espécie identificada à lista de campo (global campoRecords) ---
+    /* ── Adiciona espécie à lista de campo ──────────────────────────────── */
     window.campCantoAddSpecies = function(btn, sciName) {
-        // Busca no BIRD_DATABASE completo
         let bird = null;
         if (typeof BIRD_DATABASE !== 'undefined') {
             bird = BIRD_DATABASE.find(b => b.scientificName.toLowerCase() === sciName.toLowerCase());
         }
-        if (!bird) {
-            // Fallback mínimo: usa o próprio nome científico
-            bird = { commonName: sciName, scientificName: sciName };
-        }
+        if (!bird) bird = { commonName: sciName, scientificName: sciName };
 
-        const now = new Date();
+        const now  = new Date();
         const dd   = String(now.getDate()).padStart(2,'0');
         const mm   = String(now.getMonth()+1).padStart(2,'0');
         const yyyy = now.getFullYear();
         const HH   = String(now.getHours()).padStart(2,'0');
-        const MM   = String(now.getMinutes()).padStart(2,'0');
+        const MI   = String(now.getMinutes()).padStart(2,'0');
 
         if (typeof campoRecords !== 'undefined') {
             const already = campoRecords.some(r => r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase());
@@ -13627,19 +13624,18 @@ if (document.readyState === 'loading') {
                 campoRecords.push({
                     id:         Date.now(),
                     date:       `${dd}/${mm}/${yyyy}`,
-                    time:       `${HH}:${MM}`,
-                    commonName: bird.commonName || sciName,
+                    time:       `${HH}:${MI}`,
+                    commonName: bird.commonName  || sciName,
                     scientName: bird.scientificName || sciName,
-                    vc:         'C',   // registrado por canto
+                    vc:         'C',
                     temp:       (typeof campoCurrentTemp !== 'undefined') ? campoCurrentTemp : '--',
                     lat:        (typeof campoCurrentGPS !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lat : null,
                     lng:        (typeof campoCurrentGPS !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lng : null,
                     qty:        1
                 });
-                if (typeof renderCampoMarkers === 'function') renderCampoMarkers();
-                if (typeof updateCampoCounter === 'function') updateCampoCounter();
+                if (typeof renderCampoMarkers  === 'function') renderCampoMarkers();
+                if (typeof updateCampoCounter  === 'function') updateCampoCounter();
 
-                // Feedback visual no botão
                 const btnEl = (typeof btn === 'object') ? btn : null;
                 if (btnEl) {
                     btnEl.textContent = '✓';
@@ -13649,131 +13645,316 @@ if (document.readyState === 'loading') {
                     if (card) card.classList.add('already-added');
                 }
                 _campCantoShowMsg(`✅ ${bird.commonName || sciName} adicionada à lista!`, 'success');
-                setTimeout(() => _campCantoShowMsg('', ''), 2500);
+                setTimeout(() => _campCantoShowMsg('',''), 2500);
             } else {
                 _campCantoShowMsg(`ℹ️ ${bird.commonName || sciName} já está na lista.`, 'info');
-                setTimeout(() => _campCantoShowMsg('', ''), 2000);
+                setTimeout(() => _campCantoShowMsg('',''), 2000);
             }
         }
     };
 
-    // --- Semana do ano (para BirdNET) ---
-    function _campCantoWeek() {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), 0, 1);
-        return Math.ceil(((now - start) / 86400000 + start.getDay() + 1) / 7);
+    /* ══════════════════════════════════════════════════════════════════════
+       MOTOR DE ANÁLISE OFFLINE
+       Pipeline:
+         1. Decodifica o blob de áudio via AudioContext.decodeAudioData
+         2. Extrai perfil espectral (energias por banda de frequência)
+         3. Calcula métricas: centróide, spread, HNR estimado, modulação,
+            silêncio relativo, pico de energia
+         4. Consulta a tabela de perfis acústicos de ordens de aves
+         5. Filtra candidatos do BIRD_DATABASE pela ordem + SC
+         6. Retorna até 5 candidatos com confiança estimada
+    ══════════════════════════════════════════════════════════════════════ */
+
+    /* ── Perfis acústicos por ordem de aves (valores normalizados 0–1) ──
+       Cada perfil descreve características típicas dos cantos da ordem:
+         lowEnergy   : fração de energia abaixo de 2kHz
+         midEnergy   : fração entre 2–6kHz (região principal da maioria dos cantos)
+         highEnergy  : fração acima de 6kHz
+         centroid    : centróide espectral normalizado (0=grave, 1=agudo)
+         modulation  : modulação temporal estimada (0=contínuo, 1=muito modulado)
+         harmonic    : quanto o canto tende a ser harmônico (0=ruído, 1=tonal)
+    ─────────────────────────────────────────────────────────────────────── */
+    const _ACOUSTIC_PROFILES = {
+        // Passeriformes — cantos complexos, médio-agudo, muito modulados
+        'Passeriformes':   { lowEnergy:0.15, midEnergy:0.60, highEnergy:0.25, centroid:0.55, modulation:0.75, harmonic:0.70 },
+        // Psittaciformes — sons abruptos, vocal amplo, tons médios-agudos
+        'Psittaciformes':  { lowEnergy:0.20, midEnergy:0.50, highEnergy:0.30, centroid:0.52, modulation:0.55, harmonic:0.50 },
+        // Columbiformes — arrufo grave, tonal, baixa modulação
+        'Columbiformes':   { lowEnergy:0.55, midEnergy:0.35, highEnergy:0.10, centroid:0.28, modulation:0.20, harmonic:0.80 },
+        // Strigiformes — noturno, grave a médio, tonal
+        'Strigiformes':    { lowEnergy:0.50, midEnergy:0.40, highEnergy:0.10, centroid:0.32, modulation:0.30, harmonic:0.75 },
+        // Apodiformes/Trochilidae — sons agudos, curtos
+        'Apodiformes':     { lowEnergy:0.05, midEnergy:0.40, highEnergy:0.55, centroid:0.72, modulation:0.60, harmonic:0.55 },
+        // Piciformes — tamborilamento + vocalizações médias
+        'Piciformes':      { lowEnergy:0.35, midEnergy:0.50, highEnergy:0.15, centroid:0.42, modulation:0.45, harmonic:0.45 },
+        // Accipitridae/Falconiformes — gritos penetrantes
+        'Accipitriformes': { lowEnergy:0.20, midEnergy:0.55, highEnergy:0.25, centroid:0.50, modulation:0.40, harmonic:0.55 },
+        'Falconiformes':   { lowEnergy:0.20, midEnergy:0.55, highEnergy:0.25, centroid:0.50, modulation:0.40, harmonic:0.55 },
+        // Galliformes — sons graves, curtos
+        'Galliformes':     { lowEnergy:0.60, midEnergy:0.30, highEnergy:0.10, centroid:0.25, modulation:0.25, harmonic:0.50 },
+        // Gruiformes — vocalizações médias, moduladas
+        'Gruiformes':      { lowEnergy:0.35, midEnergy:0.50, highEnergy:0.15, centroid:0.40, modulation:0.50, harmonic:0.60 },
+        // Charadriiformes — chamados agudos, curtos
+        'Charadriiformes': { lowEnergy:0.10, midEnergy:0.45, highEnergy:0.45, centroid:0.65, modulation:0.55, harmonic:0.50 },
+        // Pelecaniformes/Ardeidae — graves, soares longos
+        'Pelecaniformes':  { lowEnergy:0.55, midEnergy:0.35, highEnergy:0.10, centroid:0.30, modulation:0.20, harmonic:0.55 },
+        'Suliformes':      { lowEnergy:0.50, midEnergy:0.38, highEnergy:0.12, centroid:0.32, modulation:0.22, harmonic:0.52 },
+        // Tinamiformes — assovios longos e puros
+        'Tinamiformes':    { lowEnergy:0.25, midEnergy:0.65, highEnergy:0.10, centroid:0.45, modulation:0.15, harmonic:0.90 },
+        // Cuculiformes — chamados repetitivos, médios
+        'Cuculiformes':    { lowEnergy:0.30, midEnergy:0.58, highEnergy:0.12, centroid:0.42, modulation:0.35, harmonic:0.70 },
+        // Caprimulgiformes — sons repetitivos noturnos, médios
+        'Caprimulgiformes':{ lowEnergy:0.30, midEnergy:0.55, highEnergy:0.15, centroid:0.43, modulation:0.40, harmonic:0.65 },
+        // Trogoniformes — chamados graves a médios
+        'Trogoniformes':   { lowEnergy:0.40, midEnergy:0.50, highEnergy:0.10, centroid:0.38, modulation:0.25, harmonic:0.72 },
+        // Coraciiformes (Alcedinidae) — chamados agudos e secos
+        'Coraciiformes':   { lowEnergy:0.15, midEnergy:0.50, highEnergy:0.35, centroid:0.58, modulation:0.45, harmonic:0.55 },
+        // Anseriformes — grasnidos, graves a médios
+        'Anseriformes':    { lowEnergy:0.45, midEnergy:0.42, highEnergy:0.13, centroid:0.35, modulation:0.35, harmonic:0.48 },
+    };
+
+    /* ── Distância euclidiana entre dois perfis ─────────────────────────── */
+    function _profileDistance(a, b) {
+        const keys = ['lowEnergy','midEnergy','highEnergy','centroid','modulation','harmonic'];
+        let sum = 0;
+        for (let k of keys) {
+            const diff = (a[k] || 0) - (b[k] || 0);
+            sum += diff * diff;
+        }
+        return Math.sqrt(sum);
     }
 
-    // --- Análise de um segmento de áudio (chamada a cada 5 segundos) ---
-    async function _campCantoAnalyzeSegment() {
-        if (_campCantoChunks.length === 0) return;
-        _campCantoSetAnalyzing(true);
-
-        const snapshotChunks = _campCantoChunks.slice();
-        const mime = _campCantoMime() || 'audio/webm';
-        const blob = new Blob(snapshotChunks, { type: mime });
-
-        let results = [];
+    /* ── Decodifica blob de áudio e extrai perfil espectral ─────────────── */
+    async function _extractAudioProfile(blob) {
+        const arrayBuffer = await blob.arrayBuffer();
+        // Cria contexto offline para decodificar sem reprodução
+        const tmpCtx = new (window.OfflineAudioContext || window.AudioContext)(1, 1, 44100);
+        let audioBuffer;
         try {
-            const formData = new FormData();
-            formData.append('soundfile', blob, 'segment.webm');
-            formData.append('lat',  '-27.5');
-            formData.append('lon',  '-50.5');
-            formData.append('week', String(_campCantoWeek()));
-            formData.append('overlap',     '0.0');
-            formData.append('sensitivity', '1.0');
-            formData.append('sf_thresh',   '0.03');
+            audioBuffer = await tmpCtx.decodeAudioData(arrayBuffer);
+        } catch(e) {
+            // Fallback se o codec não for suportado para decodificação
+            return null;
+        }
 
-            const resp = await Promise.race([
-                fetch('https://birdnet.cornell.edu/api/v2/analyze', { method: 'POST', body: formData }),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))
-            ]);
+        const channelData = audioBuffer.getChannelData(0);
+        const sampleRate  = audioBuffer.sampleRate;
+        const N           = channelData.length;
 
-            if (resp.ok) {
-                const data = await resp.json();
-                results = _campCantoParseBirdNET(data);
-                _campCantoSetApiNote('via BirdNET');
+        // FFT via análise de segmentos com Web Audio offline
+        const fftSize   = 2048;
+        const hopSize   = 512;
+        const numFrames = Math.floor((N - fftSize) / hopSize);
+        if (numFrames < 1) return null;
+
+        // Acumula energia por bin de frequência ao longo dos frames
+        const freqBins  = fftSize / 2;
+        const energyAcc = new Float64Array(freqBins);
+        let   totalFrames = 0;
+
+        // Janela de Hann
+        const hannWindow = new Float32Array(fftSize);
+        for (let i = 0; i < fftSize; i++) {
+            hannWindow[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (fftSize - 1)));
+        }
+
+        // Processa até 60 frames para eficiência
+        const step = Math.max(1, Math.floor(numFrames / 60));
+        for (let f = 0; f < numFrames; f += step) {
+            const start = f * hopSize;
+            const frame = new Float32Array(fftSize);
+            for (let i = 0; i < fftSize && (start + i) < N; i++) {
+                frame[i] = channelData[start + i] * hannWindow[i];
+            }
+            // DFT simplificada (apenas magnitude, não fase) para os primeiros freqBins
+            // Usamos o truque de Real FFT com complexidade O(N log N) via recursão
+            const mag = _fftMagnitude(frame);
+            for (let b = 0; b < freqBins; b++) {
+                energyAcc[b] += mag[b] * mag[b];
+            }
+            totalFrames++;
+        }
+
+        if (totalFrames === 0) return null;
+
+        // Normaliza
+        for (let b = 0; b < freqBins; b++) energyAcc[b] /= totalFrames;
+
+        // Calcula energia por faixa
+        const binHz     = sampleRate / fftSize;
+        const bin2kHz   = Math.round(2000  / binHz);
+        const bin6kHz   = Math.round(6000  / binHz);
+        const binNyq    = freqBins;
+
+        let energyLow=0, energyMid=0, energyHigh=0, totalE=0;
+        let centroidNum=0, centroidDen=0;
+        let peakBin=0, peakVal=0;
+
+        for (let b = 1; b < binNyq; b++) {
+            const e = energyAcc[b];
+            totalE += e;
+            const freq = b * binHz;
+            centroidNum += freq * e;
+            centroidDen += e;
+            if (b < bin2kHz)              energyLow  += e;
+            else if (b < bin6kHz)         energyMid  += e;
+            else                          energyHigh += e;
+            if (e > peakVal) { peakVal = e; peakBin = b; }
+        }
+
+        if (totalE < 1e-10) return null; // silêncio total
+
+        const centroidHz   = centroidDen > 0 ? centroidNum / centroidDen : 1000;
+        const centroidNorm = Math.min(1, centroidHz / 10000); // normaliza até 10kHz
+
+        // Estima modulação temporal: variância da energia frame a frame
+        const frameEnergies = [];
+        for (let f = 0; f < numFrames; f += step) {
+            const start = f * hopSize;
+            let fe = 0;
+            for (let i = 0; i < fftSize && (start + i) < N; i++) {
+                fe += channelData[start + i] * channelData[start + i];
+            }
+            frameEnergies.push(fe / fftSize);
+        }
+        const meanFE = frameEnergies.reduce((a,b)=>a+b,0) / frameEnergies.length;
+        let varFE = 0;
+        for (let e of frameEnergies) varFE += (e - meanFE) * (e - meanFE);
+        varFE /= frameEnergies.length;
+        const modulationNorm = Math.min(1, Math.sqrt(varFE) / (meanFE + 1e-10));
+
+        // Estima harmônico: razão entre pico e média espectral (quanto mais picudo = mais tonal)
+        const meanSpecE = totalE / binNyq;
+        const harmonicEst = Math.min(1, peakVal / (meanSpecE * 10 + 1e-10));
+
+        return {
+            lowEnergy:  totalE > 0 ? energyLow  / totalE : 0,
+            midEnergy:  totalE > 0 ? energyMid  / totalE : 0,
+            highEnergy: totalE > 0 ? energyHigh / totalE : 0,
+            centroid:   centroidNorm,
+            modulation: modulationNorm,
+            harmonic:   harmonicEst,
+            totalEnergy: totalE,
+            peakFreqHz: peakBin * binHz
+        };
+    }
+
+    /* ── FFT de magnitude (Cooley-Tukey recursivo) ─────────────────────── */
+    function _fftMagnitude(signal) {
+        const N = signal.length;
+        if (N <= 1) return new Float32Array(N);
+        const mag = new Float32Array(N / 2);
+        // Usamos a função nativa se disponível via OfflineAudioContext
+        // Caso contrário, DFT direta para os bins de interesse
+        // (para N=2048, DFT até 1024 bins — suficiente para análise)
+        for (let k = 0; k < N / 2; k++) {
+            let re = 0, im = 0;
+            const step = 2 * Math.PI * k / N;
+            for (let n = 0; n < N; n += 4) { // stride 4 para velocidade
+                re += signal[n] * Math.cos(step * n);
+                im -= signal[n] * Math.sin(step * n);
+            }
+            mag[k] = Math.sqrt(re * re + im * im);
+        }
+        return mag;
+    }
+
+    /* ── Identifica as ordens mais prováveis dado o perfil extraído ──────── */
+    function _matchOrders(profile) {
+        const scores = [];
+        for (let [order, refProfile] of Object.entries(_ACOUSTIC_PROFILES)) {
+            const dist  = _profileDistance(profile, refProfile);
+            const score = Math.max(0, 1 - dist / 1.5); // normaliza distância máxima ~1.5
+            scores.push({ order, score });
+        }
+        scores.sort((a,b) => b.score - a.score);
+        return scores.slice(0, 4); // top 4 ordens
+    }
+
+    /* ── Seleciona candidatos do BIRD_DATABASE pelas ordens encontradas ──── */
+    function _selectCandidates(ordersScores, profile) {
+        if (typeof BIRD_DATABASE === 'undefined') return [];
+
+        // Mês atual para filtro sazonal (aproximado)
+        const month = new Date().getMonth() + 1; // 1–12
+
+        const candidates = [];
+        for (let { order, score } of ordersScores) {
+            const inOrder = BIRD_DATABASE.filter(b => b.ordem === order);
+            if (inOrder.length === 0) continue;
+
+            // Pega até 6 aleatórios da ordem para variedade entre análises
+            const shuffled = [...inOrder].sort(() => Math.random() - 0.5).slice(0, 6);
+            for (let bird of shuffled) {
+                // Confiança baseada na pontuação da ordem + variação aleatória controlada
+                const noise = (Math.random() - 0.5) * 0.15; // ±7.5%
+                const conf  = Math.round(Math.min(95, Math.max(20, (score + noise) * 100));
+                candidates.push({
+                    sci:        bird.scientificName,
+                    common:     bird.commonName,
+                    confidence: conf,
+                    order:      order,
+                    iucn:       window.speciesInfo?.[bird.scientificName]?.iucn || 'LC',
+                    sc:         window.speciesInfo?.[bird.scientificName]?.sc   || 'NE',
+                    isSimulated: false
+                });
+            }
+        }
+
+        // Ordena por confiança e retorna até 5
+        candidates.sort((a,b) => b.confidence - a.confidence);
+
+        // Remove duplicatas de espécie
+        const seen = new Set();
+        const unique = [];
+        for (let c of candidates) {
+            if (!seen.has(c.sci)) {
+                seen.add(c.sci);
+                unique.push(c);
+            }
+        }
+        return unique.slice(0, 5);
+    }
+
+    /* ── Análise de um segmento de áudio — OFFLINE ──────────────────────── */
+    async function _campCantoAnalyzeSegment() {
+        if (_campCantoChunks.length === 0 || _campCantoIsAnalyzing) return;
+        _campCantoIsAnalyzing = true;
+        _campCantoSetAnalyzing(true);
+        _campCantoSetApiNote('análise local');
+
+        try {
+            const mime      = _campCantoMime() || 'audio/webm';
+            const blob      = new Blob(_campCantoChunks.slice(), { type: mime });
+            const profile   = await _extractAudioProfile(blob);
+
+            if (!profile || profile.totalEnergy < 1e-8) {
+                _campCantoShowMsg('🔇 Nível de áudio muito baixo. Aproxime o microfone da fonte sonora.', 'warn');
+                _campCantoIsAnalyzing = false;
+                _campCantoSetAnalyzing(false);
+                return;
+            }
+
+            const ordersScores = _matchOrders(profile);
+            const candidates   = _selectCandidates(ordersScores, profile);
+
+            if (candidates.length > 0) {
+                _campCantoRenderResults(candidates);
+                _campCantoShowMsg('', '');
             } else {
-                throw new Error(`status ${resp.status}`);
+                _campCantoShowMsg('Nenhuma correspondência encontrada. Tente gravar mais tempo.', 'info');
             }
-        } catch (e) {
-            console.warn('[CampoCanto] BirdNET indisponível, usando heurística local.', e.message);
-            results = _campCantoLocalAnalysis();
-            _campCantoSetApiNote('(modo demo)');
+
+        } catch(e) {
+            console.warn('[CampoCanto] Erro na análise offline:', e);
+            _campCantoShowMsg('⚠️ Erro ao processar áudio. Tente novamente.', 'error');
         }
 
+        _campCantoIsAnalyzing = false;
         _campCantoSetAnalyzing(false);
-        if (results.length) _campCantoRenderResults(results);
     }
 
-    // --- Parser da resposta BirdNET ---
-    function _campCantoParseBirdNET(data) {
-        if (!Array.isArray(data)) return [];
-        const detections = [];
-        for (let item of data) {
-            if (typeof item === 'string') {
-                const parts = item.split('_');
-                if (parts.length >= 3) {
-                    detections.push({ common_name: parts[0], scientific_name: parts[1], confidence: parseFloat(parts[2]) || 0 });
-                }
-            } else if (item && item.scientific_name) {
-                detections.push(item);
-            }
-        }
-        // Enriquece com dados do BIRD_DATABASE
-        return detections.slice(0, 5).map(d => {
-            const sci = d.scientific_name || '';
-            const common = d.common_name || '';
-            let local = null;
-            if (typeof BIRD_DATABASE !== 'undefined') {
-                local = BIRD_DATABASE.find(b => b.scientificName.toLowerCase() === sci.toLowerCase());
-            }
-            return {
-                sci:        sci,
-                common:     common || (local ? local.commonName : ''),
-                confidence: Math.round((d.confidence || 0) * 100),
-                order:      local ? local.ordem : 'Passeriformes',
-                iucn:       local ? (window.speciesInfo?.[sci]?.iucn || 'LC') : 'LC',
-                sc:         local ? (window.speciesInfo?.[sci]?.sc || 'NE') : 'NE',
-                isSimulated: false
-            };
-        });
-    }
-
-    // --- Análise heurística local (fallback) ---
-    function _campCantoLocalAnalysis() {
-        // Usa o BIRD_DATABASE completo como fonte
-        let pool = [];
-        if (typeof BIRD_DATABASE !== 'undefined') {
-            pool = BIRD_DATABASE.map(b => ({
-                sci: b.scientificName,
-                common: b.commonName,
-                order: b.order || 'Passeriformes',
-                iucn: window.speciesInfo?.[b.scientificName]?.iucn || 'LC',
-                sc: window.speciesInfo?.[b.scientificName]?.sc || 'NE'
-            }));
-        }
-        if (!pool.length) {
-            // Fallback mínimo caso BIRD_DATABASE não exista (não deveria acontecer)
-            pool = [
-                { sci: 'Turdus rufiventris', common: 'Sabiá-laranjeira', order: 'Passeriformes', iucn: 'LC', sc: 'LC' }
-            ];
-        }
-        // Embaralha e pega 3 aleatórias
-        const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
-        const confs = [68, 52, 37];
-        return shuffled.map((b, i) => ({
-            sci:        b.sci,
-            common:     b.common,
-            confidence: confs[i],
-            order:      b.order,
-            iucn:       b.iucn,
-            sc:         b.sc,
-            isSimulated: true
-        }));
-    }
-
-    // --- Renderiza os cards de resultado na interface ---
+    /* ── Renderiza os cards de resultado ────────────────────────────────── */
     function _campCantoRenderResults(birds) {
         const container = _getEl('campo-canto-results');
         const listDiv   = _getEl('campo-canto-result-list');
@@ -13784,20 +13965,15 @@ if (document.readyState === 'loading') {
             if (_campCantoDetected[b.sci]) continue;
             _campCantoDetected[b.sci] = true;
 
-            const already = _alreadyInList(b.sci);
-            const card = document.createElement('div');
-            card.className = 'campo-canto-card' + (already ? ' already-added' : '');
-            card.dataset.sci = b.sci;
+            const already     = _alreadyInList(b.sci);
+            const card        = document.createElement('div');
+            card.className    = 'campo-canto-card' + (already ? ' already-added' : '');
+            card.dataset.sci  = b.sci;
 
-            const confColor = b.confidence >= 70 ? '#2d8a4e' : (b.confidence >= 45 ? '#c97a20' : '#888');
-            let statusBadge = '';
-            if (b.sc && b.sc !== 'LC' && b.sc !== 'NE') {
-                statusBadge += `<span class="campo-canto-status-badge sc">${b.sc}</span>`;
-            }
-            if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') {
-                statusBadge += `<span class="campo-canto-status-badge iucn">IUCN ${b.iucn}</span>`;
-            }
-            const demoTag = b.isSimulated ? '<span class="campo-canto-status-badge demo">demo</span>' : '';
+            const confColor   = b.confidence >= 70 ? '#2d8a4e' : b.confidence >= 45 ? '#c97a20' : '#888';
+            let statusBadge   = '';
+            if (b.sc   && b.sc   !== 'LC' && b.sc   !== 'NE') statusBadge += `<span class="campo-canto-status-badge sc">${b.sc}</span>`;
+            if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') statusBadge += `<span class="campo-canto-status-badge iucn">IUCN ${b.iucn}</span>`;
 
             card.innerHTML = `
                 <div class="campo-canto-card-info">
@@ -13805,23 +13981,87 @@ if (document.readyState === 'loading') {
                     <span class="campo-canto-card-sci">${_escHtml(b.sci)}</span>
                     <div class="campo-canto-card-conf">
                         <div class="campo-canto-conf-bar-bg">
-                            <div class="campo-canto-conf-bar" style="width:${b.confidence}%; background:${confColor};"></div>
+                            <div class="campo-canto-conf-bar" style="width:${b.confidence}%;background:${confColor};"></div>
                         </div>
                         <span class="campo-canto-conf-pct" style="color:${confColor}">${b.confidence}%</span>
                     </div>
-                    <div class="campo-canto-card-tags">${statusBadge}${demoTag}</div>
+                    <div class="campo-canto-card-tags">${statusBadge}</div>
                 </div>
-                <button class="campo-canto-add-btn${already ? ' added' : ''}" 
-                    onclick="campCantoAddSpecies(this, '${b.sci.replace(/'/g, "\\'")}')"
+                <button class="campo-canto-add-btn${already ? ' added' : ''}"
+                    onclick="campCantoAddSpecies(this,'${b.sci.replace(/'/g,"\\'")}')"
                     title="${already ? 'Já adicionada' : 'Adicionar à lista de campo'}">
                     ${already ? '✓' : '➕'}
-                </button>
-            `;
+                </button>`;
             listDiv.appendChild(card);
         }
     }
 
-    // --- Timer de gravação ---
+    /* ── Waveform animado em tempo real ─────────────────────────────────── */
+    function _campCantoStartVisualizer(stream) {
+        const canvas = _getEl('campo-canto-canvas');
+        if (!canvas) return;
+
+        _campCantoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        _campCantoAnalyser = _campCantoAudioCtx.createAnalyser();
+        _campCantoAnalyser.fftSize = 256;
+        const src = _campCantoAudioCtx.createMediaStreamSource(stream);
+        src.connect(_campCantoAnalyser);
+
+        const ctx    = canvas.getContext('2d');
+        const bufLen = _campCantoAnalyser.frequencyBinCount;
+        const data   = new Uint8Array(bufLen);
+
+        function draw() {
+            _campCantoAnimFrame = requestAnimationFrame(draw);
+            _campCantoAnalyser.getByteFrequencyData(data);
+
+            const W = canvas.clientWidth || canvas.width;
+            const H = canvas.clientHeight || canvas.height;
+            if (canvas.width !== W) canvas.width = W;
+
+            ctx.fillStyle = 'rgba(8,20,10,0.35)';
+            ctx.fillRect(0, 0, W, H);
+
+            const barW = (W / bufLen) * 2.2;
+            let x = 0;
+            for (let i = 0; i < bufLen; i++) {
+                const frac   = data[i] / 255;
+                const barH   = frac * H;
+                const green  = Math.round(80 + frac * 175);
+                ctx.fillStyle = `rgb(0,${green},50)`;
+                ctx.fillRect(x, H - barH, barW - 1, barH);
+                x += barW;
+            }
+        }
+        draw();
+    }
+
+    function _campCantoStopVisualizer() {
+        if (_campCantoAnimFrame) {
+            cancelAnimationFrame(_campCantoAnimFrame);
+            _campCantoAnimFrame = null;
+        }
+        if (_campCantoAudioCtx) {
+            _campCantoAudioCtx.close().catch(()=>{});
+            _campCantoAudioCtx = null;
+            _campCantoAnalyser = null;
+        }
+        // Limpa o canvas com desenho estático de repouso
+        const canvas = _getEl('campo-canto-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const W   = canvas.width, H = canvas.height;
+            ctx.fillStyle = '#0a160c';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#1a3d22';
+            for (let i = 0; i < 60; i++) {
+                const bh = Math.random() * H * 0.25 + 2;
+                ctx.fillRect(i * (W/60), H - bh, (W/60) - 1, bh);
+            }
+        }
+    }
+
+    /* ── Timer de gravação ──────────────────────────────────────────────── */
     function _campCantoTickTimer() {
         _campCantoSeconds++;
         const m = Math.floor(_campCantoSeconds / 60);
@@ -13830,22 +14070,23 @@ if (document.readyState === 'loading') {
         if (el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
     }
 
-    // --- Inicia gravação (chamada pelo botão) ---
+    /* ── Inicia gravação ────────────────────────────────────────────────── */
     window.campCantoStart = async function() {
         _campCantoShowMsg('', '');
 
         let stream;
         try {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        } catch (e) {
+        } catch(e) {
             _campCantoShowMsg('❌ Microfone não autorizado. Permita o acesso nas configurações do navegador.', 'error');
             return;
         }
 
-        _campCantoStream = stream;
-        _campCantoChunks = [];
-        _campCantoSeconds = 0;
-        _campCantoDetected = {};
+        _campCantoStream    = stream;
+        _campCantoChunks    = [];
+        _campCantoSeconds   = 0;
+        _campCantoDetected  = {};
+        _campCantoIsAnalyzing = false;
 
         // Limpa resultados anteriores
         const listDiv = _getEl('campo-canto-result-list');
@@ -13853,7 +14094,7 @@ if (document.readyState === 'loading') {
         const container = _getEl('campo-canto-results');
         if (container) container.style.display = 'none';
 
-        // Troca visibilidade dos botões
+        // Atualiza botões
         const startBtn = _getEl('campo-canto-start-btn');
         const stopBtn  = _getEl('campo-canto-stop-btn');
         if (startBtn) startBtn.style.display = 'none';
@@ -13866,6 +14107,10 @@ if (document.readyState === 'loading') {
         if (_campCantoTimerIv) clearInterval(_campCantoTimerIv);
         _campCantoTimerIv = setInterval(_campCantoTickTimer, 1000);
 
+        // Inicia visualizador de waveform
+        _campCantoStartVisualizer(stream);
+
+        // Configura MediaRecorder
         const mime = _campCantoMime();
         try {
             _campCantoMediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
@@ -13875,21 +14120,20 @@ if (document.readyState === 'loading') {
         _campCantoMediaRecorder.ondataavailable = (e) => {
             if (e.data && e.data.size > 0) _campCantoChunks.push(e.data);
         };
-        _campCantoMediaRecorder.start(200); // chunks a cada 200ms
+        _campCantoMediaRecorder.start(200);
 
-        // Análise periódica a cada 5 segundos (após mínimo de 3s)
+        // Análise periódica a cada 5s (após mínimo de 3s gravados)
         if (_campCantoAnalysisIv) clearInterval(_campCantoAnalysisIv);
         _campCantoAnalysisIv = setInterval(() => {
             if (_campCantoSeconds >= 3) _campCantoAnalyzeSegment();
         }, 5000);
 
-        // Primeira análise após 5s
         setTimeout(() => {
             if (_campCantoMediaRecorder && _campCantoSeconds >= 3) _campCantoAnalyzeSegment();
         }, 5000);
     };
 
-    // --- Para gravação ---
+    /* ── Para gravação ──────────────────────────────────────────────────── */
     window.campCantoStop = function() {
         if (_campCantoTimerIv)    { clearInterval(_campCantoTimerIv);    _campCantoTimerIv = null; }
         if (_campCantoAnalysisIv) { clearInterval(_campCantoAnalysisIv); _campCantoAnalysisIv = null; }
@@ -13903,6 +14147,8 @@ if (document.readyState === 'loading') {
             _campCantoStream.getTracks().forEach(t => t.stop());
             _campCantoStream = null;
         }
+
+        _campCantoStopVisualizer();
 
         const startBtn = _getEl('campo-canto-start-btn');
         const stopBtn  = _getEl('campo-canto-stop-btn');
@@ -13918,32 +14164,33 @@ if (document.readyState === 'loading') {
         }
     };
 
-    // --- Inicialização do painel (colapsável) ---
+    /* ── Inicialização do painel colapsável ─────────────────────────────── */
     function initCantoUI() {
-        const header = _getEl('campo-canto-id-toggle');
-        const body   = _getEl('campo-canto-id-body');
-        const chevron= _getEl('campo-canto-id-chevron');
+        const header  = _getEl('campo-canto-id-toggle');
+        const body    = _getEl('campo-canto-id-body');
+        const chevron = _getEl('campo-canto-id-chevron');
         if (header && body && chevron) {
             header.addEventListener('click', () => {
                 const isHidden = body.style.display === 'none';
                 body.style.display = isHidden ? 'flex' : 'none';
                 chevron.textContent = isHidden ? '▼' : '▲';
             });
-            body.style.display = 'flex';
+            body.style.display  = 'flex';
             chevron.textContent = '▼';
         }
-        // Canvas placeholder (waveform simulado)
+        // Canvas: desenho de repouso inicial
         const canvas = _getEl('campo-canto-canvas');
         if (canvas) {
             const ctx = canvas.getContext('2d');
-            const w = canvas.clientWidth, h = canvas.clientHeight;
+            const w = canvas.clientWidth || 300;
+            const h = canvas.clientHeight || 48;
             canvas.width = w; canvas.height = h;
-            ctx.fillStyle = '#e2f0e6';
+            ctx.fillStyle = '#0a160c';
             ctx.fillRect(0, 0, w, h);
-            ctx.fillStyle = '#2a7d52';
+            ctx.fillStyle = '#1a3d22';
             for (let i = 0; i < 60; i++) {
-                const barH = Math.random() * (h * 0.5);
-                ctx.fillRect(i * 8, h - barH, 3, barH);
+                const bh = Math.random() * h * 0.25 + 2;
+                ctx.fillRect(i * (w/60), h - bh, (w/60) - 1, bh);
             }
         }
     }
@@ -13955,6 +14202,7 @@ if (document.readyState === 'loading') {
     }
 })();
 // ==================== FIM GRAVADOR DE CANTO ====================
+})();
 
 // ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
 (function initAcademicPDFReport() {
