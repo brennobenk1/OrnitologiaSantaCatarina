@@ -2590,3 +2590,263 @@
 }
 
 /* ══ FIM MODO CAMPO ══ */
+
+/* ══════════════════════════════════════════
+   IDENTIFICADOR DE CANTO — MODO CAMPO
+══════════════════════════════════════════ */
+
+.campo-canto-id-panel {
+    background: #0d2218;
+    border-top: 1.5px solid #1e4030;
+    border-bottom: 1.5px solid #1e4030;
+    flex-shrink: 0;
+}
+.campo-canto-id-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+}
+.campo-canto-id-header:hover { background: rgba(255,255,255,.04); }
+.campo-canto-id-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #7dd4a8;
+    letter-spacing: .3px;
+}
+.campo-canto-id-chevron {
+    font-size: 11px;
+    color: #5a9e78;
+    transition: transform .2s;
+}
+.campo-canto-id-chevron.open { transform: rotate(180deg); }
+.campo-canto-id-body {
+    padding: 0 14px 14px;
+    display: none;
+}
+.campo-canto-id-body.open { display: block; }
+.campo-canto-waveform {
+    background: #081510;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #1e3a28;
+}
+#campo-canto-canvas {
+    flex: 1;
+    height: 44px;
+    border-radius: 4px;
+    background: #081510;
+}
+.campo-canto-waveform-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 58px;
+}
+.campo-canto-timer {
+    font-size: 18px;
+    font-weight: 700;
+    color: #7dd4a8;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+}
+.campo-canto-timer.rec { color: #e74c3c; }
+.campo-canto-hint {
+    font-size: 10px;
+    color: #4a7a60;
+    text-align: right;
+    line-height: 1.3;
+}
+.campo-canto-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.campo-canto-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+}
+.campo-canto-btn-rec {
+    background: #e74c3c;
+    color: white;
+    box-shadow: 0 2px 8px rgba(231,76,60,.35);
+}
+.campo-canto-btn-rec:hover { background: #c0392b; }
+.campo-canto-btn-stop { background: #555; color: white; }
+.campo-canto-btn-stop:hover { background: #333; }
+.campo-canto-live-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #e74c3c;
+    animation: campoCantoPulse .9s ease-in-out infinite alternate;
+}
+@keyframes campoCantoPulse { from { opacity: 1; } to { opacity: .4; } }
+.campo-canto-analyzing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #7dd4a8;
+    padding: 6px 0;
+}
+.campo-canto-spin {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #1e3a28;
+    border-top-color: #7dd4a8;
+    border-radius: 50%;
+    animation: campCantoSpin .7s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes campCantoSpin { to { transform: rotate(360deg); } }
+.campo-canto-msg {
+    font-size: 11.5px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: rgba(231,76,60,.15);
+    color: #e74c3c;
+    border-left: 3px solid #e74c3c;
+}
+.campo-canto-msg.info {
+    background: rgba(125,212,168,.12);
+    color: #7dd4a8;
+    border-left-color: #7dd4a8;
+}
+.campo-canto-results-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #5a9e78;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.campo-canto-api-note {
+    font-size: 10px;
+    font-weight: 400;
+    color: #3a6050;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.campo-canto-result-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.campo-canto-result-card {
+    background: #0f1f18;
+    border: 1.5px solid #1e3a28;
+    border-radius: 8px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: border-color .15s;
+}
+.campo-canto-result-card:hover { border-color: #2a7d52; }
+.campo-canto-result-card.top-match { border-color: #2a7d52; background: #0d1f16; }
+.campo-canto-card-info { flex: 1; min-width: 0; }
+.campo-canto-card-common {
+    font-size: 13px;
+    font-weight: 700;
+    color: #c8e8d0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+.campo-canto-card-sci {
+    font-size: 11px;
+    font-style: italic;
+    color: #4a7a60;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+.campo-canto-card-conf {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+}
+.campo-canto-conf-bar-bg {
+    width: 60px;
+    height: 4px;
+    background: #1e3a28;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.campo-canto-conf-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width .5s ease;
+}
+.campo-canto-conf-pct {
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 28px;
+}
+.campo-canto-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+.campo-canto-card-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    background: rgba(125,212,168,.1);
+    color: #5a9e78;
+}
+.campo-canto-add-btn {
+    background: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(46,125,50,.4);
+    font-weight: 700;
+}
+.campo-canto-add-btn:hover {
+    background: #388e3c;
+    transform: scale(1.12);
+    box-shadow: 0 3px 10px rgba(46,125,50,.55);
+}
+.campo-canto-add-btn.added {
+    background: #2a4038;
+    transform: none;
+    box-shadow: none;
+    cursor: default;
+    font-size: 15px;
+    color: #7dd4a8;
+}
