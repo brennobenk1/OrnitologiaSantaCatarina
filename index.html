@@ -1910,19 +1910,48 @@
                 <button id="campo-canto-stop-btn" class="campo-canto-btn campo-canto-btn-stop" onclick="campCantoStop()" style="display:none;">
                     ⏹ Parar
                 </button>
+                <!-- Botão download MP3 — aparece após gravar -->
+                <button id="campo-canto-dl-btn" class="campo-canto-btn campo-canto-btn-dl" onclick="campCantoDownloadAudio()" style="display:none;" title="Baixar gravação em MP3/WebM">
+                    ⬇️ MP3
+                </button>
                 <span id="campo-canto-live-badge" class="campo-canto-live-badge" style="display:none;">🔴 Ao vivo</span>
-            </div>
-
-            <!-- Resultados em tempo real -->
-            <div id="campo-canto-results" class="campo-canto-results" style="display:none;">
-                <div class="campo-canto-results-label">🦜 Espécies detectadas <span id="campo-canto-api-note" class="campo-canto-api-note"></span></div>
-                <div id="campo-canto-result-list" class="campo-canto-result-list"></div>
             </div>
 
             <!-- Spinner de análise -->
             <div id="campo-canto-analyzing" class="campo-canto-analyzing" style="display:none;">
                 <div class="campo-canto-spin"></div>
                 <span>Analisando canto…</span>
+            </div>
+
+            <!-- Resultados separados por confiança -->
+            <div id="campo-canto-results" class="campo-canto-results" style="display:none;">
+
+                <!-- Seção ≥ 80%: Alta confiança -->
+                <div id="campo-canto-high-section" style="display:none;">
+                    <div class="campo-canto-section-label campo-canto-section-high">
+                        🎯 Alta confiança <span class="campo-canto-section-sub">(≥ 80%)</span>
+                        <span id="campo-canto-api-note" class="campo-canto-api-note"></span>
+                    </div>
+                    <div id="campo-canto-high-list" class="campo-canto-result-list"></div>
+                </div>
+
+                <!-- Seção 50–79%: Possível -->
+                <div id="campo-canto-mid-section" style="display:none;">
+                    <div class="campo-canto-section-label campo-canto-section-mid">
+                        🔍 Possível <span class="campo-canto-section-sub">(50–79%)</span>
+                    </div>
+                    <div id="campo-canto-mid-list" class="campo-canto-result-list"></div>
+                </div>
+
+                <!-- Seção < 50%: Improvável (colapsada por padrão) -->
+                <div id="campo-canto-low-section" style="display:none;">
+                    <div class="campo-canto-section-label campo-canto-section-low" onclick="campCantoToggleLow()" style="cursor:pointer;">
+                        ❔ Baixa confiança <span class="campo-canto-section-sub">(&lt; 50%)</span>
+                        <span id="campo-canto-low-chevron" style="margin-left:auto;font-size:10px;">▼</span>
+                    </div>
+                    <div id="campo-canto-low-list" class="campo-canto-result-list" style="display:none;"></div>
+                </div>
+
             </div>
 
             <!-- Mensagem -->
