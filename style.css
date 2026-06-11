@@ -2670,6 +2670,7 @@
     gap: 8px;
     align-items: center;
     margin-bottom: 10px;
+    flex-wrap: wrap;
 }
 .campo-canto-btn {
     padding: 8px 16px;
@@ -2689,6 +2690,14 @@
 .campo-canto-btn-rec:hover { background: #c0392b; }
 .campo-canto-btn-stop { background: #555; color: white; }
 .campo-canto-btn-stop:hover { background: #333; }
+/* Botão download áudio */
+.campo-canto-btn-dl {
+    background: #1a4a6e;
+    color: #7dd4f8;
+    border: 1.5px solid #2a6a9e;
+    box-shadow: 0 2px 6px rgba(26,74,110,.4);
+}
+.campo-canto-btn-dl:hover { background: #1e5a85; transform: translateY(-1px); }
 .campo-canto-live-badge {
     font-size: 11px;
     font-weight: 700;
@@ -2728,6 +2737,58 @@
     color: #7dd4a8;
     border-left-color: #7dd4a8;
 }
+.campo-canto-msg.success {
+    background: rgba(46,125,50,.2);
+    color: #81c784;
+    border-left-color: #4caf50;
+}
+.campo-canto-msg.warn {
+    background: rgba(255,165,0,.12);
+    color: #ffa040;
+    border-left-color: #ffa040;
+}
+/* ── Seções de confiança ── */
+.campo-canto-results {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.campo-canto-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 7px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.campo-canto-section-sub {
+    font-weight: 400;
+    text-transform: none;
+    font-size: 10px;
+    opacity: .8;
+    letter-spacing: 0;
+}
+.campo-canto-section-high {
+    background: rgba(46,160,80,.18);
+    color: #6ddb96;
+    border-left: 3px solid #2ea050;
+}
+.campo-canto-section-mid {
+    background: rgba(201,122,32,.18);
+    color: #f0a840;
+    border-left: 3px solid #c97a20;
+}
+.campo-canto-section-low {
+    background: rgba(100,100,100,.15);
+    color: #8aabb0;
+    border-left: 3px solid #556;
+}
+/* ── Cards de resultado ── */
 .campo-canto-results-label {
     font-size: 11px;
     font-weight: 700;
@@ -2745,13 +2806,16 @@
     color: #3a6050;
     text-transform: none;
     letter-spacing: 0;
+    margin-left: auto;
 }
 .campo-canto-result-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    margin-bottom: 4px;
 }
-.campo-canto-result-card {
+/* Card genérico */
+.campo-canto-card {
     background: #0f1f18;
     border: 1.5px solid #1e3a28;
     border-radius: 8px;
@@ -2761,8 +2825,22 @@
     gap: 10px;
     transition: border-color .15s;
 }
-.campo-canto-result-card:hover { border-color: #2a7d52; }
-.campo-canto-result-card.top-match { border-color: #2a7d52; background: #0d1f16; }
+.campo-canto-card:hover { border-color: #2a7d52; }
+/* Alta confiança: borda esquerda verde */
+.campo-canto-card-high {
+    border-left: 3px solid #2ea050;
+    background: #0b1d12;
+}
+/* Possível: borda esquerda âmbar */
+.campo-canto-card-mid {
+    border-left: 3px solid #c97a20;
+    background: #1a1508;
+}
+/* Baixa confiança: apagado */
+.campo-canto-card-low {
+    opacity: .7;
+}
+.campo-canto-card.already-added { opacity: .55; }
 .campo-canto-card-info { flex: 1; min-width: 0; }
 .campo-canto-card-common {
     font-size: 13px;
@@ -2819,6 +2897,15 @@
     background: rgba(125,212,168,.1);
     color: #5a9e78;
 }
+.campo-canto-status-badge {
+    font-size: 9.5px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+.campo-canto-status-badge.sc   { background: rgba(231,76,60,.2);  color: #e74c3c; }
+.campo-canto-status-badge.iucn { background: rgba(255,165,0,.2);  color: #ffa040; }
+/* Botão adicionar à lista */
 .campo-canto-add-btn {
     background: #2e7d32;
     color: white;
@@ -2850,3 +2937,18 @@
     font-size: 15px;
     color: #7dd4a8;
 }
+/* ── Marcador de áudio no mapa de campo ── */
+.campo-audio-marker-icon {
+    background: #1a4a6e;
+    border: 2.5px solid #7dd4f8;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(26,74,110,.6);
+    cursor: pointer;
+}
+
