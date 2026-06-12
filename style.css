@@ -1,4 +1,4 @@
-        /* ===== ORNITOLOGIA AVANÇADA — CSS PROFISSIONAL 2026 ===== */
+/* ===== ORNITOLOGIA AVANÇADA — CSS PROFISSIONAL 2026 ===== */
 
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap');
 
@@ -2625,9 +2625,11 @@
 .campo-canto-id-chevron.open { transform: rotate(180deg); }
 .campo-canto-id-body {
     padding: 0 14px 14px;
-    display: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
-.campo-canto-id-body.open { display: block; }
+.campo-canto-id-body.collapsed { display: none; }
 .campo-canto-waveform {
     background: #081510;
     border-radius: 8px;
@@ -2951,4 +2953,3 @@
     box-shadow: 0 2px 8px rgba(26,74,110,.6);
     cursor: pointer;
 }
-
