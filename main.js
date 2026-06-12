@@ -13541,651 +13541,697 @@ if (document.readyState === 'loading') {
 
 
 // ==================== GRAVADOR DE CANTO (MODO CAMPO) — 100% OFFLINE ====================
-(function() {
+(function () {
     'use strict';
 
-    /* ── Estado do gravador ─────────────────────────────────────────────── */
-    let _campCantoMediaRecorder = null;
-    let _campCantoChunks        = [];
-    let _campCantoTimerIv       = null;
-    let _campCantoSeconds       = 0;
-    let _campCantoAnalysisIv    = null;
-    let _campCantoDetected      = {};
-    let _campCantoStream        = null;
-    let _campCantoAudioCtx      = null;
-    let _campCantoAnalyser      = null;
-    let _campCantoAnimFrame     = null;
-    let _campCantoIsAnalyzing   = false;
-    let _campCantoLastBlob      = null;   // ← guarda o blob do áudio para download
-    let _campCantoLastMime      = '';     // ← mime type da gravação
+    /* ── Estado ─────────────────────────────────────────────────────────── */
+    var _mr       = null;   // MediaRecorder
+    var _chunks   = [];     // chunks de áudio
+    var _timerIv  = null;
+    var _analysisIv = null;
+    var _secs     = 0;
+    var _detected = {};
+    var _stream   = null;
+    var _actx     = null;   // AudioContext (visualizer)
+    var _analyser = null;
+    var _raf      = null;   // requestAnimationFrame id
+    var _busy     = false;  // análise em andamento
+    var _lastBlob = null;   // blob final para download
+    var _lastMime = '';
+    var _open     = true;   // estado do painel colapsável
 
-    /* ── Helpers DOM ────────────────────────────────────────────────────── */
-    function _getEl(id) { return document.getElementById(id); }
+    /* ── DOM helper ─────────────────────────────────────────────────────── */
+    function $id(id) { return document.getElementById(id); }
 
-    function _escHtml(s) {
-        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    /* ── Mime type suportado ────────────────────────────────────────────── */
-    function _campCantoMime() {
-        const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
-        for (let t of types) {
-            if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+    /* ── Mime type compatível ───────────────────────────────────────────── */
+    function _bestMime() {
+        // Ordem de preferência: opus/webm (Chrome/Firefox/Android),
+        // mp4/aac (Safari iOS/macOS), ogg fallback
+        var list = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/mp4',
+            'audio/ogg;codecs=opus',
+            'audio/ogg'
+        ];
+        if (!window.MediaRecorder) return '';
+        for (var i = 0; i < list.length; i++) {
+            try { if (MediaRecorder.isTypeSupported(list[i])) return list[i]; } catch(e) {}
         }
         return '';
     }
 
-    /* ── UI helpers ─────────────────────────────────────────────────────── */
-    function _campCantoShowMsg(txt, type) {
-        const el = _getEl('campo-canto-msg');
+    /* ── Mensagem de status ─────────────────────────────────────────────── */
+    function _msg(txt, type) {
+        var el = $id('campo-canto-msg');
         if (!el) return;
         el.textContent = txt || '';
         el.className   = 'campo-canto-msg' + (type ? ' ' + type : '');
         el.style.display = txt ? 'block' : 'none';
     }
 
-    function _campCantoSetAnalyzing(on) {
-        const el = _getEl('campo-canto-analyzing');
+    function _setAnalyzing(on) {
+        var el = $id('campo-canto-analyzing');
         if (el) el.style.display = on ? 'flex' : 'none';
     }
 
-    function _campCantoSetBadge(on) {
-        const el = _getEl('campo-canto-live-badge');
+    function _setBadge(on) {
+        var el = $id('campo-canto-live-badge');
         if (el) el.style.display = on ? 'inline-flex' : 'none';
     }
 
-    function _campCantoSetApiNote(txt) {
-        const el = _getEl('campo-canto-api-note');
-        if (el) el.textContent = txt;
+    function _setDlBtn(show, label) {
+        var el = $id('campo-canto-dl-btn');
+        if (!el) return;
+        el.style.display = show ? 'inline-flex' : 'none';
+        if (label) el.textContent = label;
     }
 
-    /* ── Mostra / oculta botão de download ──────────────────────────────── */
-    function _campCantoSetDlBtn(show) {
-        const el = _getEl('campo-canto-dl-btn');
-        if (el) el.style.display = show ? 'inline-flex' : 'none';
+    function _escHtml(s) {
+        return String(s || '')
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    /* ── Verifica se espécie já está em campoRecords ────────────────────── */
-    function _alreadyInList(sciName) {
+    /* ── Toggle do painel colapsável ────────────────────────────────────── */
+    // Controla APENAS via variável + style.display direto — sem classes CSS
+    // para evitar conflito com qualquer regra existente no style.css.
+    function _togglePanel() {
+        _open = !_open;
+        var body    = $id('campo-canto-id-body');
+        var chevron = $id('campo-canto-id-chevron');
+        if (body)    body.style.display    = _open ? 'flex' : 'none';
+        if (chevron) chevron.textContent   = _open ? '▲' : '▼';
+    }
+
+    /* ── Verifica duplicata na lista ────────────────────────────────────── */
+    function _inList(sci) {
         if (typeof campoRecords === 'undefined') return false;
-        return campoRecords.some(r => r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase());
+        return campoRecords.some(function(r) {
+            return r.scientName && r.scientName.toLowerCase() === sci.toLowerCase();
+        });
     }
-
-    /* ── Adiciona espécie à lista de campo ──────────────────────────────── */
-    window.campCantoAddSpecies = function(btn, sciName) {
-        let bird = null;
-        if (typeof BIRD_DATABASE !== 'undefined') {
-            bird = BIRD_DATABASE.find(b => b.scientificName.toLowerCase() === sciName.toLowerCase());
-        }
-        if (!bird) bird = { commonName: sciName, scientificName: sciName };
-
-        const now  = new Date();
-        const dd   = String(now.getDate()).padStart(2,'0');
-        const mm   = String(now.getMonth()+1).padStart(2,'0');
-        const yyyy = now.getFullYear();
-        const HH   = String(now.getHours()).padStart(2,'0');
-        const MI   = String(now.getMinutes()).padStart(2,'0');
-
-        if (typeof campoRecords !== 'undefined') {
-            const already = campoRecords.some(r => r.scientName && r.scientName.toLowerCase() === sciName.toLowerCase());
-            if (!already) {
-                campoRecords.push({
-                    id:         Date.now(),
-                    date:       `${dd}/${mm}/${yyyy}`,
-                    time:       `${HH}:${MI}`,
-                    commonName: bird.commonName  || sciName,
-                    scientName: bird.scientificName || sciName,
-                    vc:         'C',
-                    temp:       (typeof campoCurrentTemp !== 'undefined') ? campoCurrentTemp : '--',
-                    lat:        (typeof campoCurrentGPS !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lat : null,
-                    lng:        (typeof campoCurrentGPS !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lng : null,
-                    qty:        1
-                });
-                if (typeof renderCampoMarkers  === 'function') renderCampoMarkers();
-                if (typeof updateCampoCounter  === 'function') updateCampoCounter();
-
-                const btnEl = (typeof btn === 'object') ? btn : null;
-                if (btnEl) {
-                    btnEl.textContent = '✓';
-                    btnEl.classList.add('added');
-                    btnEl.title = 'Adicionada à lista';
-                    const card = btnEl.closest('.campo-canto-card');
-                    if (card) card.classList.add('already-added');
-                }
-                _campCantoShowMsg(`✅ ${bird.commonName || sciName} adicionada à lista!`, 'success');
-                setTimeout(() => _campCantoShowMsg('',''), 2500);
-            } else {
-                _campCantoShowMsg(`ℹ️ ${bird.commonName || sciName} já está na lista.`, 'info');
-                setTimeout(() => _campCantoShowMsg('',''), 2000);
-            }
-        }
-    };
 
     /* ══════════════════════════════════════════════════════════════════════
-       DOWNLOAD DO ÁUDIO GRAVADO
-       O navegador não consegue exportar MP3 nativo via MediaRecorder —
-       ele grava em WebM/Opus ou OGG. Estratégia:
-         1. Tenta converter para WAV (PCM) via Web Audio API (sem deps)
-            e baixa como .wav (reproduzível em qualquer player).
-         2. Fallback: baixa o blob original (.webm ou .ogg) renomeado
-            como .mp3 — o arquivo é válido tecnicamente e pode ser
-            convertido pelo usuário em qualquer conversor.
-       Nota: converter para MP3 real no browser requer lamejs (lib externa),
-       o que violaria o requisito offline sem CDN. WAV é preferível.
+       API PÚBLICA
     ══════════════════════════════════════════════════════════════════════ */
-    window.campCantoDownloadAudio = async function() {
-        if (!_campCantoLastBlob || _campCantoLastBlob.size === 0) {
-            _campCantoShowMsg('Nenhuma gravação disponível. Grave primeiro.', 'info');
+
+    /* ── Adicionar espécie à lista ──────────────────────────────────────── */
+    window.campCantoAddSpecies = function (btn, sci) {
+        var bird = null;
+        if (typeof BIRD_DATABASE !== 'undefined') {
+            for (var i = 0; i < BIRD_DATABASE.length; i++) {
+                if (BIRD_DATABASE[i].scientificName.toLowerCase() === sci.toLowerCase()) {
+                    bird = BIRD_DATABASE[i]; break;
+                }
+            }
+        }
+        if (!bird) bird = { commonName: sci, scientificName: sci };
+
+        if (typeof campoRecords === 'undefined') {
+            _msg('⚠️ Lista de campo não encontrada.', 'error'); return;
+        }
+        if (_inList(sci)) {
+            _msg('ℹ️ ' + (bird.commonName || sci) + ' já está na lista.', 'info');
+            setTimeout(function(){ _msg('',''); }, 2000);
             return;
         }
 
-        const dlBtn = _getEl('campo-canto-dl-btn');
-        if (dlBtn) { dlBtn.textContent = '⏳ Convertendo…'; dlBtn.disabled = true; }
+        var now = new Date();
+        var pad = function(n){ return String(n).padStart(2,'0'); };
+        campoRecords.push({
+            id:         Date.now(),
+            date:       pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear(),
+            time:       pad(now.getHours())+':'+pad(now.getMinutes()),
+            commonName: bird.commonName  || sci,
+            scientName: bird.scientificName || sci,
+            vc:         'C',
+            temp:       (typeof campoCurrentTemp !== 'undefined') ? campoCurrentTemp : '--',
+            lat:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lat : null,
+            lng:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lng : null,
+            qty:        1
+        });
 
-        try {
-            const wavBlob = await _campCantoToWav(_campCantoLastBlob);
-            _campCantoBlobDownload(wavBlob, _campCantoFileName('wav'), 'audio/wav');
-            _campCantoShowMsg('✅ Download iniciado (.wav — qualidade original)', 'success');
-            setTimeout(() => _campCantoShowMsg('',''), 3000);
-        } catch(e) {
-            // Fallback: baixa o arquivo original com extensão .mp3
-            console.warn('[CampoCanto] Conversão WAV falhou, baixando original:', e);
-            _campCantoBlobDownload(_campCantoLastBlob, _campCantoFileName('mp3'), _campCantoLastMime);
-            _campCantoShowMsg('⬇️ Download iniciado (formato original do navegador)', 'info');
-            setTimeout(() => _campCantoShowMsg('',''), 3000);
+        if (typeof renderCampoMarkers === 'function') renderCampoMarkers();
+        if (typeof updateCampoCounter === 'function') updateCampoCounter();
+
+        if (btn && btn.nodeType) {
+            btn.textContent = '✓';
+            btn.classList.add('added');
+            btn.disabled = true;
+            btn.title = 'Adicionada à lista';
+            var card = btn.closest ? btn.closest('.campo-canto-card') : null;
+            if (card) card.classList.add('already-added');
         }
-
-        if (dlBtn) { dlBtn.textContent = '⬇️ Baixar áudio'; dlBtn.disabled = false; }
+        _msg('✅ ' + (bird.commonName || sci) + ' adicionada!', 'success');
+        setTimeout(function(){ _msg('',''); }, 2500);
     };
 
-    /* ── Converte blob de áudio para WAV PCM 16-bit via Web Audio API ──── */
-    async function _campCantoToWav(blob) {
-        const arrayBuffer = await blob.arrayBuffer();
-        const offlineCtx  = new (window.OfflineAudioContext || window.AudioContext)(1, 1, 44100);
-        const audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
+    /* ── Download do áudio gravado ──────────────────────────────────────── */
+    window.campCantoDownloadAudio = function () {
+        if (!_lastBlob || _lastBlob.size === 0) {
+            _msg('Nenhuma gravação disponível. Grave primeiro.', 'info'); return;
+        }
+        var dlBtn = $id('campo-canto-dl-btn');
+        if (dlBtn) { dlBtn.textContent = '⏳…'; dlBtn.disabled = true; }
 
-        const numCh      = audioBuffer.numberOfChannels;
-        const sr         = audioBuffer.sampleRate;
-        const numSamples = audioBuffer.length;
-        const bytesPerSample = 2; // 16-bit
-        const dataSize   = numSamples * numCh * bytesPerSample;
-        const buffer     = new ArrayBuffer(44 + dataSize);
-        const view       = new DataView(buffer);
+        _toWav(_lastBlob).then(function(wav) {
+            _triggerDownload(wav, _fileName('wav'), 'audio/wav');
+            _msg('✅ Download iniciado (.wav)', 'success');
+            setTimeout(function(){ _msg('',''); }, 3000);
+        }).catch(function() {
+            // fallback: baixa o formato original do browser
+            _triggerDownload(_lastBlob, _fileName('audio'), _lastMime);
+            _msg('⬇️ Download no formato original do navegador.', 'info');
+            setTimeout(function(){ _msg('',''); }, 3000);
+        }).finally(function() {
+            if (dlBtn) { dlBtn.textContent = '⬇️ Baixar áudio'; dlBtn.disabled = false; }
+        });
+    };
 
-        // WAV header
-        const writeStr = (off, s) => { for (let i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); };
-        writeStr(0,  'RIFF');
-        view.setUint32(4,  36 + dataSize, true);
-        writeStr(8,  'WAVE');
-        writeStr(12, 'fmt ');
-        view.setUint32(16, 16, true);           // chunk size
-        view.setUint16(20, 1,  true);           // PCM
-        view.setUint16(22, numCh, true);
-        view.setUint32(24, sr, true);
-        view.setUint32(28, sr * numCh * bytesPerSample, true); // byte rate
-        view.setUint16(32, numCh * bytesPerSample, true);      // block align
-        view.setUint16(34, 16, true);           // bits per sample
-        writeStr(36, 'data');
-        view.setUint32(40, dataSize, true);
+    /* ── Toggle da seção de baixa confiança ─────────────────────────────── */
+    window.campCantoToggleLow = function () {
+        var list    = $id('campo-canto-low-list');
+        var chevron = $id('campo-canto-low-chevron');
+        if (!list) return;
+        var hidden = list.style.display === 'none' || list.style.display === '';
+        list.style.display = hidden ? 'flex' : 'none';
+        if (chevron) chevron.textContent = hidden ? '▲' : '▼';
+    };
 
-        // Escreve amostras PCM intercaladas
-        let offset = 44;
-        for (let i = 0; i < numSamples; i++) {
-            for (let ch = 0; ch < numCh; ch++) {
-                const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(ch)[i]));
-                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-                offset += 2;
+    /* ── Iniciar gravação ────────────────────────────────────────────────── */
+    window.campCantoStart = function () {
+        // iOS Safari exige que getUserMedia seja chamado DENTRO do handler de
+        // evento de toque — não pode ser adiado por Promise externa.
+        // Por isso usamos uma Promise imediata e tratamos o resultado.
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            _msg('❌ Gravação de áudio não suportada neste navegador.', 'error'); return;
+        }
+
+        // Resume AudioContext suspenso (política de autoplay do Chrome/Safari)
+        if (_actx && _actx.state === 'suspended') {
+            _actx.resume().catch(function(){});
+        }
+
+        var constraints = { audio: { echoCancellation: true, noiseSuppression: true }, video: false };
+
+        navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+            _onStreamReady(stream);
+        }).catch(function(err) {
+            var msg = '❌ Microfone não autorizado.';
+            if (err && err.name === 'NotFoundError')     msg = '❌ Nenhum microfone encontrado.';
+            if (err && err.name === 'NotAllowedError')   msg = '❌ Permissão de microfone negada. Verifique as configurações do navegador.';
+            if (err && err.name === 'NotSupportedError') msg = '❌ Microfone não suportado neste dispositivo.';
+            _msg(msg, 'error');
+        });
+    };
+
+    function _onStreamReady(stream) {
+        _stream  = stream;
+        _chunks  = [];
+        _secs    = 0;
+        _detected = {};
+        _busy    = false;
+        _lastBlob = null;
+        _setDlBtn(false);
+
+        // Limpa resultados anteriores
+        ['campo-canto-high-list','campo-canto-mid-list','campo-canto-low-list'].forEach(function(id){
+            var el = $id(id); if (el) el.innerHTML = '';
+        });
+        ['campo-canto-high-section','campo-canto-mid-section','campo-canto-low-section','campo-canto-results'].forEach(function(id){
+            var el = $id(id); if (el) el.style.display = 'none';
+        });
+
+        // Troca botões
+        var startBtn = $id('campo-canto-start-btn');
+        var stopBtn  = $id('campo-canto-stop-btn');
+        if (startBtn) startBtn.style.display = 'none';
+        if (stopBtn)  stopBtn.style.display  = 'inline-flex';
+        _setBadge(true);
+        _msg('','');
+
+        // Timer
+        var timerEl = $id('campo-canto-timer');
+        if (timerEl) { timerEl.textContent = '0:00'; timerEl.classList.add('rec'); }
+        if (_timerIv) clearInterval(_timerIv);
+        _timerIv = setInterval(function(){
+            _secs++;
+            var m = Math.floor(_secs/60), s = _secs % 60;
+            if (timerEl) timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        }, 1000);
+
+        // Visualizador
+        _startVisualizer(stream);
+
+        // MediaRecorder — tenta com mime, fallback sem opções
+        var mime = _bestMime();
+        _lastMime = mime || 'audio/webm';
+        try {
+            _mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        } catch(e) {
+            try { _mr = new MediaRecorder(stream); } catch(e2) {
+                _msg('❌ MediaRecorder não suportado neste navegador.', 'error');
+                stream.getTracks().forEach(function(t){ t.stop(); });
+                return;
             }
         }
 
-        return new Blob([buffer], { type: 'audio/wav' });
+        _mr.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) _chunks.push(e.data);
+        };
+
+        // timeslice de 500ms para acumular chunks em tempo real
+        _mr.start(500);
+
+        // Análise periódica a cada 6s (mínimo 4s gravados)
+        if (_analysisIv) clearInterval(_analysisIv);
+        _analysisIv = setInterval(function(){
+            if (_secs >= 4) _analyze();
+        }, 6000);
     }
 
-    /* ── Dispara download de um Blob ────────────────────────────────────── */
-    function _campCantoBlobDownload(blob, filename, type) {
-        const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href     = url;
-        a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-    }
+    /* ── Parar gravação ─────────────────────────────────────────────────── */
+    window.campCantoStop = function () {
+        if (_timerIv)    { clearInterval(_timerIv);    _timerIv = null; }
+        if (_analysisIv) { clearInterval(_analysisIv); _analysisIv = null; }
 
-    /* ── Gera nome de arquivo com timestamp ─────────────────────────────── */
-    function _campCantoFileName(ext) {
-        const d   = new Date();
-        const pad = n => String(n).padStart(2,'0');
-        return `canto_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.${ext}`;
-    }
+        var timerEl = $id('campo-canto-timer');
+        if (timerEl) timerEl.classList.remove('rec');
+
+        var startBtn = $id('campo-canto-start-btn');
+        var stopBtn  = $id('campo-canto-stop-btn');
+        if (startBtn) startBtn.style.display = 'inline-flex';
+        if (stopBtn)  stopBtn.style.display  = 'none';
+        _setBadge(false);
+        _setAnalyzing(false);
+
+        _stopVisualizer();
+
+        if (_mr && _mr.state !== 'inactive') {
+            _mr.addEventListener('stop', function() {
+                _mr = null;
+                if (_chunks.length > 0) {
+                    _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
+                    _setDlBtn(true, '⬇️ Baixar áudio');
+                    _analyze();
+                } else {
+                    _msg('ℹ️ Nenhum áudio capturado. Tente novamente.', 'info');
+                }
+            }, { once: true });
+            _mr.stop();
+        } else {
+            _mr = null;
+            if (_chunks.length > 0) {
+                _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
+                _setDlBtn(true, '⬇️ Baixar áudio');
+                _analyze();
+            } else {
+                _msg('ℹ️ Nenhum áudio capturado.', 'info');
+            }
+        }
+
+        if (_stream) {
+            _stream.getTracks().forEach(function(t){ t.stop(); });
+            _stream = null;
+        }
+    };
 
     /* ══════════════════════════════════════════════════════════════════════
-       MOTOR DE ANÁLISE OFFLINE
+       VISUALIZADOR DE WAVEFORM
     ══════════════════════════════════════════════════════════════════════ */
-
-    const _ACOUSTIC_PROFILES = {
-        'Passeriformes':   { lowEnergy:0.15, midEnergy:0.60, highEnergy:0.25, centroid:0.55, modulation:0.75, harmonic:0.70 },
-        'Psittaciformes':  { lowEnergy:0.20, midEnergy:0.50, highEnergy:0.30, centroid:0.52, modulation:0.55, harmonic:0.50 },
-        'Columbiformes':   { lowEnergy:0.55, midEnergy:0.35, highEnergy:0.10, centroid:0.28, modulation:0.20, harmonic:0.80 },
-        'Strigiformes':    { lowEnergy:0.50, midEnergy:0.40, highEnergy:0.10, centroid:0.32, modulation:0.30, harmonic:0.75 },
-        'Apodiformes':     { lowEnergy:0.05, midEnergy:0.40, highEnergy:0.55, centroid:0.72, modulation:0.60, harmonic:0.55 },
-        'Piciformes':      { lowEnergy:0.35, midEnergy:0.50, highEnergy:0.15, centroid:0.42, modulation:0.45, harmonic:0.45 },
-        'Accipitriformes': { lowEnergy:0.20, midEnergy:0.55, highEnergy:0.25, centroid:0.50, modulation:0.40, harmonic:0.55 },
-        'Falconiformes':   { lowEnergy:0.20, midEnergy:0.55, highEnergy:0.25, centroid:0.50, modulation:0.40, harmonic:0.55 },
-        'Galliformes':     { lowEnergy:0.60, midEnergy:0.30, highEnergy:0.10, centroid:0.25, modulation:0.25, harmonic:0.50 },
-        'Gruiformes':      { lowEnergy:0.35, midEnergy:0.50, highEnergy:0.15, centroid:0.40, modulation:0.50, harmonic:0.60 },
-        'Charadriiformes': { lowEnergy:0.10, midEnergy:0.45, highEnergy:0.45, centroid:0.65, modulation:0.55, harmonic:0.50 },
-        'Pelecaniformes':  { lowEnergy:0.55, midEnergy:0.35, highEnergy:0.10, centroid:0.30, modulation:0.20, harmonic:0.55 },
-        'Suliformes':      { lowEnergy:0.50, midEnergy:0.38, highEnergy:0.12, centroid:0.32, modulation:0.22, harmonic:0.52 },
-        'Tinamiformes':    { lowEnergy:0.25, midEnergy:0.65, highEnergy:0.10, centroid:0.45, modulation:0.15, harmonic:0.90 },
-        'Cuculiformes':    { lowEnergy:0.30, midEnergy:0.58, highEnergy:0.12, centroid:0.42, modulation:0.35, harmonic:0.70 },
-        'Caprimulgiformes':{ lowEnergy:0.30, midEnergy:0.55, highEnergy:0.15, centroid:0.43, modulation:0.40, harmonic:0.65 },
-        'Trogoniformes':   { lowEnergy:0.40, midEnergy:0.50, highEnergy:0.10, centroid:0.38, modulation:0.25, harmonic:0.72 },
-        'Coraciiformes':   { lowEnergy:0.15, midEnergy:0.50, highEnergy:0.35, centroid:0.58, modulation:0.45, harmonic:0.55 },
-        'Anseriformes':    { lowEnergy:0.45, midEnergy:0.42, highEnergy:0.13, centroid:0.35, modulation:0.35, harmonic:0.48 },
-    };
-
-    function _profileDistance(a, b) {
-        const keys = ['lowEnergy','midEnergy','highEnergy','centroid','modulation','harmonic'];
-        let sum = 0;
-        for (let k of keys) { const diff = (a[k]||0)-(b[k]||0); sum += diff*diff; }
-        return Math.sqrt(sum);
-    }
-
-    async function _extractAudioProfile(blob) {
-        const arrayBuffer = await blob.arrayBuffer();
-        const tmpCtx = new (window.OfflineAudioContext || window.AudioContext)(1, 1, 44100);
-        let audioBuffer;
-        try { audioBuffer = await tmpCtx.decodeAudioData(arrayBuffer); }
-        catch(e) { return null; }
-
-        const channelData = audioBuffer.getChannelData(0);
-        const sampleRate  = audioBuffer.sampleRate;
-        const N           = channelData.length;
-        const fftSize     = 2048;
-        const hopSize     = 512;
-        const numFrames   = Math.floor((N - fftSize) / hopSize);
-        if (numFrames < 1) return null;
-
-        const freqBins  = fftSize / 2;
-        const energyAcc = new Float64Array(freqBins);
-        let   totalFrames = 0;
-
-        const hannWindow = new Float32Array(fftSize);
-        for (let i = 0; i < fftSize; i++) hannWindow[i] = 0.5*(1-Math.cos(2*Math.PI*i/(fftSize-1)));
-
-        const step = Math.max(1, Math.floor(numFrames / 60));
-        for (let f = 0; f < numFrames; f += step) {
-            const start = f * hopSize;
-            const frame = new Float32Array(fftSize);
-            for (let i = 0; i < fftSize && (start+i) < N; i++) frame[i] = channelData[start+i]*hannWindow[i];
-            const mag = _fftMagnitude(frame);
-            for (let b = 0; b < freqBins; b++) energyAcc[b] += mag[b]*mag[b];
-            totalFrames++;
-        }
-        if (totalFrames === 0) return null;
-        for (let b = 0; b < freqBins; b++) energyAcc[b] /= totalFrames;
-
-        const binHz   = sampleRate / fftSize;
-        const bin2kHz = Math.round(2000/binHz);
-        const bin6kHz = Math.round(6000/binHz);
-        let energyLow=0,energyMid=0,energyHigh=0,totalE=0;
-        let centroidNum=0,centroidDen=0,peakBin=0,peakVal=0;
-
-        for (let b = 1; b < freqBins; b++) {
-            const e = energyAcc[b]; totalE += e;
-            centroidNum += b*binHz*e; centroidDen += e;
-            if (b < bin2kHz) energyLow += e;
-            else if (b < bin6kHz) energyMid += e;
-            else energyHigh += e;
-            if (e > peakVal) { peakVal = e; peakBin = b; }
-        }
-        if (totalE < 1e-10) return null;
-
-        const centroidNorm = Math.min(1, (centroidDen>0 ? centroidNum/centroidDen : 1000)/10000);
-
-        const frameEnergies = [];
-        for (let f = 0; f < numFrames; f += step) {
-            const start = f*hopSize; let fe = 0;
-            for (let i = 0; i < fftSize && (start+i)<N; i++) fe += channelData[start+i]*channelData[start+i];
-            frameEnergies.push(fe/fftSize);
-        }
-        const meanFE = frameEnergies.reduce((a,b)=>a+b,0)/frameEnergies.length;
-        let varFE = 0;
-        for (let e of frameEnergies) varFE += (e-meanFE)*(e-meanFE);
-        varFE /= frameEnergies.length;
-
-        return {
-            lowEnergy:   energyLow/totalE,
-            midEnergy:   energyMid/totalE,
-            highEnergy:  energyHigh/totalE,
-            centroid:    centroidNorm,
-            modulation:  Math.min(1, Math.sqrt(varFE)/(meanFE+1e-10)),
-            harmonic:    Math.min(1, peakVal/((totalE/freqBins)*10+1e-10)),
-            totalEnergy: totalE,
-            peakFreqHz:  peakBin*binHz
-        };
-    }
-
-    function _fftMagnitude(signal) {
-        const N = signal.length;
-        const mag = new Float32Array(N/2);
-        for (let k = 0; k < N/2; k++) {
-            let re=0, im=0;
-            const step = 2*Math.PI*k/N;
-            for (let n = 0; n < N; n += 4) { re += signal[n]*Math.cos(step*n); im -= signal[n]*Math.sin(step*n); }
-            mag[k] = Math.sqrt(re*re+im*im);
-        }
-        return mag;
-    }
-
-    function _matchOrders(profile) {
-        const scores = [];
-        for (let [order, ref] of Object.entries(_ACOUSTIC_PROFILES)) {
-            scores.push({ order, score: Math.max(0, 1-_profileDistance(profile,ref)/1.5) });
-        }
-        return scores.sort((a,b)=>b.score-a.score).slice(0,4);
-    }
-
-    function _selectCandidates(ordersScores) {
-        if (typeof BIRD_DATABASE === 'undefined') return [];
-        const candidates = [];
-        for (let { order, score } of ordersScores) {
-            const inOrder = BIRD_DATABASE.filter(b => b.ordem === order);
-            if (!inOrder.length) continue;
-            const shuffled = [...inOrder].sort(()=>Math.random()-.5).slice(0,6);
-            for (let bird of shuffled) {
-                const noise = (Math.random()-.5)*.15;
-                candidates.push({
-                    sci:        bird.scientificName,
-                    common:     bird.commonName,
-                    confidence: Math.round(Math.min(95,Math.max(20,(score+noise)*100))),
-                    iucn:       window.speciesInfo?.[bird.scientificName]?.iucn || 'LC',
-                    sc:         window.speciesInfo?.[bird.scientificName]?.sc   || 'NE'
-                });
-            }
-        }
-        candidates.sort((a,b)=>b.confidence-a.confidence);
-        const seen = new Set(), unique = [];
-        for (let c of candidates) { if (!seen.has(c.sci)) { seen.add(c.sci); unique.push(c); } }
-        return unique.slice(0,5);
-    }
-
-    async function _campCantoAnalyzeSegment() {
-        if (_campCantoChunks.length === 0 || _campCantoIsAnalyzing) return;
-        _campCantoIsAnalyzing = true;
-        _campCantoSetAnalyzing(true);
-        _campCantoSetApiNote('análise local');
-
-        try {
-            const mime    = _campCantoMime() || 'audio/webm';
-            const blob    = new Blob(_campCantoChunks.slice(), { type: mime });
-            const profile = await _extractAudioProfile(blob);
-
-            if (!profile || profile.totalEnergy < 1e-8) {
-                _campCantoShowMsg('🔇 Nível de áudio muito baixo. Aproxime o microfone da fonte sonora.', 'warn');
-            } else {
-                const candidates = _selectCandidates(_matchOrders(profile));
-                if (candidates.length > 0) { _campCantoRenderResults(candidates); _campCantoShowMsg('',''); }
-                else _campCantoShowMsg('Nenhuma correspondência. Tente gravar mais tempo.', 'info');
-            }
-        } catch(e) {
-            console.warn('[CampoCanto] Erro análise offline:', e);
-            _campCantoShowMsg('⚠️ Erro ao processar áudio. Tente novamente.', 'error');
-        }
-        _campCantoIsAnalyzing = false;
-        _campCantoSetAnalyzing(false);
-    }
-
-    function _campCantoRenderResults(birds) {
-        const container = _getEl('campo-canto-results');
-        const highList  = _getEl('campo-canto-high-list');
-        const midList   = _getEl('campo-canto-mid-list');
-        const lowList   = _getEl('campo-canto-low-list');
-        const highSec   = _getEl('campo-canto-high-section');
-        const midSec    = _getEl('campo-canto-mid-section');
-        const lowSec    = _getEl('campo-canto-low-section');
-        if (!container) return;
-        container.style.display = 'block';
-
-        for (let b of birds) {
-            if (_campCantoDetected[b.sci]) continue;
-            _campCantoDetected[b.sci] = true;
-
-            const already    = _alreadyInList(b.sci);
-            const card       = document.createElement('div');
-            const tier       = b.confidence >= 80 ? 'high' : b.confidence >= 50 ? 'mid' : 'low';
-            const confColor  = tier==='high' ? '#2ea050' : tier==='mid' ? '#c97a20' : '#888';
-            card.className   = `campo-canto-card campo-canto-card-${tier}${already?' already-added':''}`;
-            card.dataset.sci = b.sci;
-
-            let statusBadge = '';
-            if (b.sc   && b.sc   !== 'LC' && b.sc   !== 'NE') statusBadge += `<span class="campo-canto-status-badge sc">${b.sc}</span>`;
-            if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') statusBadge += `<span class="campo-canto-status-badge iucn">IUCN ${b.iucn}</span>`;
-
-            card.innerHTML = `
-                <div class="campo-canto-card-info">
-                    <span class="campo-canto-card-common">${_escHtml(b.common||b.sci)}</span>
-                    <span class="campo-canto-card-sci">${_escHtml(b.sci)}</span>
-                    <div class="campo-canto-card-conf">
-                        <div class="campo-canto-conf-bar-bg">
-                            <div class="campo-canto-conf-bar" style="width:${b.confidence}%;background:${confColor};"></div>
-                        </div>
-                        <span class="campo-canto-conf-pct" style="color:${confColor}">${b.confidence}%</span>
-                    </div>
-                    <div class="campo-canto-card-tags">${statusBadge}</div>
-                </div>
-                <button class="campo-canto-add-btn${already?' added':''}"
-                    onclick="campCantoAddSpecies(this,'${b.sci.replace(/'/g,"\\'")}')"
-                    title="${already?'Já adicionada':'Adicionar à lista de campo'}">
-                    ${already?'✓':'➕'}
-                </button>`;
-
-            const targetList = tier==='high' ? highList : tier==='mid' ? midList : lowList;
-            const targetSec  = tier==='high' ? highSec  : tier==='mid' ? midSec  : lowSec;
-            if (targetList) targetList.appendChild(card);
-            if (targetSec)  targetSec.style.display = 'block';
-        }
-    }
-
-    /* ── Toggle seção baixa confiança ───────────────────────────────────── */
-    window.campCantoToggleLow = function() {
-        const list    = _getEl('campo-canto-low-list');
-        const chevron = _getEl('campo-canto-low-chevron');
-        if (!list) return;
-        const isHidden = list.style.display === 'none';
-        list.style.display    = isHidden ? 'flex' : 'none';
-        if (chevron) chevron.textContent = isHidden ? '▲' : '▼';
-    };
-
-    /* ── Waveform animado ───────────────────────────────────────────────── */
-    function _campCantoStartVisualizer(stream) {
-        const canvas = _getEl('campo-canto-canvas');
+    function _startVisualizer(stream) {
+        var canvas = $id('campo-canto-canvas');
         if (!canvas) return;
-        _campCantoAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
-        _campCantoAnalyser = _campCantoAudioCtx.createAnalyser();
-        _campCantoAnalyser.fftSize = 256;
-        const src = _campCantoAudioCtx.createMediaStreamSource(stream);
-        src.connect(_campCantoAnalyser);
-        const ctx    = canvas.getContext('2d');
-        const bufLen = _campCantoAnalyser.frequencyBinCount;
-        const data   = new Uint8Array(bufLen);
+        try {
+            _actx     = new (window.AudioContext || window.webkitAudioContext)();
+            _analyser = _actx.createAnalyser();
+            _analyser.fftSize = 256;
+            var src = _actx.createMediaStreamSource(stream);
+            src.connect(_analyser);
+        } catch(e) { return; }
+
+        var ctx    = canvas.getContext('2d');
+        var bufLen = _analyser.frequencyBinCount;
+        var data   = new Uint8Array(bufLen);
+
         function draw() {
-            _campCantoAnimFrame = requestAnimationFrame(draw);
-            _campCantoAnalyser.getByteFrequencyData(data);
-            const W = canvas.clientWidth||canvas.width, H = canvas.clientHeight||canvas.height;
-            if (canvas.width !== W) canvas.width = W;
-            ctx.fillStyle = 'rgba(8,20,10,0.35)'; ctx.fillRect(0,0,W,H);
-            const barW = (W/bufLen)*2.2; let x = 0;
-            for (let i = 0; i < bufLen; i++) {
-                const frac = data[i]/255, barH = frac*H;
-                ctx.fillStyle = `rgb(0,${Math.round(80+frac*175)},50)`;
-                ctx.fillRect(x, H-barH, barW-1, barH); x += barW;
+            _raf = requestAnimationFrame(draw);
+            _analyser.getByteFrequencyData(data);
+            var W = canvas.offsetWidth || canvas.width || 300;
+            var H = canvas.offsetHeight || canvas.height || 44;
+            if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+            ctx.fillStyle = 'rgba(8,20,10,0.4)';
+            ctx.fillRect(0, 0, W, H);
+            var barW = W / bufLen;
+            for (var i = 0; i < bufLen; i++) {
+                var v = data[i] / 255;
+                ctx.fillStyle = 'rgb(0,' + Math.round(80 + v*175) + ',50)';
+                ctx.fillRect(i * barW, H - v * H, barW - 1, v * H);
             }
         }
         draw();
     }
 
-    function _campCantoStopVisualizer() {
-        if (_campCantoAnimFrame) { cancelAnimationFrame(_campCantoAnimFrame); _campCantoAnimFrame = null; }
-        if (_campCantoAudioCtx)  { _campCantoAudioCtx.close().catch(()=>{}); _campCantoAudioCtx = null; _campCantoAnalyser = null; }
-        const canvas = _getEl('campo-canto-canvas');
-        if (canvas) {
-            const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-            ctx.fillStyle = '#0a160c'; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = '#1a3d22';
-            for (let i=0;i<60;i++) { const bh=Math.random()*H*0.25+2; ctx.fillRect(i*(W/60),H-bh,(W/60)-1,bh); }
+    function _stopVisualizer() {
+        if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+        if (_actx) { try { _actx.close(); } catch(e){} _actx = null; _analyser = null; }
+        _drawIdle();
+    }
+
+    function _drawIdle() {
+        var canvas = $id('campo-canto-canvas');
+        if (!canvas) return;
+        var W = canvas.offsetWidth || canvas.width || 300;
+        var H = canvas.offsetHeight || canvas.height || 44;
+        canvas.width = W; canvas.height = H;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#081510';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#1a3d22';
+        for (var i = 0; i < 60; i++) {
+            var bh = Math.random() * H * 0.3 + 2;
+            ctx.fillRect(i * (W/60), H - bh, W/60 - 1, bh);
         }
     }
 
-    /* ── Timer ──────────────────────────────────────────────────────────── */
-    function _campCantoTickTimer() {
-        _campCantoSeconds++;
-        const m = Math.floor(_campCantoSeconds/60), s = _campCantoSeconds%60;
-        const el = _getEl('campo-canto-timer');
-        if (el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    /* ══════════════════════════════════════════════════════════════════════
+       MOTOR DE ANÁLISE ESPECTRAL OFFLINE
+    ══════════════════════════════════════════════════════════════════════ */
+
+    var _PROFILES = {
+        'Passeriformes':   { lo:0.15, mi:0.60, hi:0.25, ce:0.55, mo:0.75, ha:0.70 },
+        'Psittaciformes':  { lo:0.20, mi:0.50, hi:0.30, ce:0.52, mo:0.55, ha:0.50 },
+        'Columbiformes':   { lo:0.55, mi:0.35, hi:0.10, ce:0.28, mo:0.20, ha:0.80 },
+        'Strigiformes':    { lo:0.50, mi:0.40, hi:0.10, ce:0.32, mo:0.30, ha:0.75 },
+        'Apodiformes':     { lo:0.05, mi:0.40, hi:0.55, ce:0.72, mo:0.60, ha:0.55 },
+        'Piciformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.42, mo:0.45, ha:0.45 },
+        'Accipitriformes': { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
+        'Falconiformes':   { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
+        'Galliformes':     { lo:0.60, mi:0.30, hi:0.10, ce:0.25, mo:0.25, ha:0.50 },
+        'Gruiformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.40, mo:0.50, ha:0.60 },
+        'Charadriiformes': { lo:0.10, mi:0.45, hi:0.45, ce:0.65, mo:0.55, ha:0.50 },
+        'Pelecaniformes':  { lo:0.55, mi:0.35, hi:0.10, ce:0.30, mo:0.20, ha:0.55 },
+        'Suliformes':      { lo:0.50, mi:0.38, hi:0.12, ce:0.32, mo:0.22, ha:0.52 },
+        'Tinamiformes':    { lo:0.25, mi:0.65, hi:0.10, ce:0.45, mo:0.15, ha:0.90 },
+        'Cuculiformes':    { lo:0.30, mi:0.58, hi:0.12, ce:0.42, mo:0.35, ha:0.70 },
+        'Caprimulgiformes':{ lo:0.30, mi:0.55, hi:0.15, ce:0.43, mo:0.40, ha:0.65 },
+        'Trogoniformes':   { lo:0.40, mi:0.50, hi:0.10, ce:0.38, mo:0.25, ha:0.72 },
+        'Coraciiformes':   { lo:0.15, mi:0.50, hi:0.35, ce:0.58, mo:0.45, ha:0.55 },
+        'Anseriformes':    { lo:0.45, mi:0.42, hi:0.13, ce:0.35, mo:0.35, ha:0.48 }
+    };
+
+    function _profileDist(a, b) {
+        var k=['lo','mi','hi','ce','mo','ha'], s=0, d;
+        for (var i=0;i<k.length;i++){ d=(a[k[i]]||0)-(b[k[i]]||0); s+=d*d; }
+        return Math.sqrt(s);
     }
 
-    /* ── Inicia gravação ────────────────────────────────────────────────── */
-    window.campCantoStart = async function() {
-        _campCantoShowMsg('','');
-        _campCantoSetDlBtn(false);
-        _campCantoLastBlob = null;
+    function _extractProfile(blob) {
+        return new Promise(function(resolve, reject) {
+            var fr = new FileReader();
+            fr.onerror = reject;
+            fr.onload = function() {
+                var ab = fr.result;
+                var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtxClass) { reject(new Error('no AudioContext')); return; }
+                var ctx;
+                try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
+                ctx.decodeAudioData(ab, function(buf) {
+                    try {
+                        ctx.close();
+                        var ch   = buf.getChannelData(0);
+                        var sr   = buf.sampleRate;
+                        var N    = ch.length;
+                        var fftN = 2048;
+                        var hop  = 512;
+                        var nF   = Math.floor((N - fftN) / hop);
+                        if (nF < 1) { reject(new Error('short')); return; }
 
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        } catch(e) {
-            _campCantoShowMsg('❌ Microfone não autorizado. Permita o acesso nas configurações do navegador.', 'error');
-            return;
-        }
+                        var hann = new Float32Array(fftN);
+                        for (var i=0;i<fftN;i++) hann[i]=0.5*(1-Math.cos(2*Math.PI*i/(fftN-1)));
 
-        _campCantoStream      = stream;
-        _campCantoChunks      = [];
-        _campCantoSeconds     = 0;
-        _campCantoDetected    = {};
-        _campCantoIsAnalyzing = false;
+                        var bins  = fftN/2;
+                        var acc   = new Float64Array(bins);
+                        var step  = Math.max(1, Math.floor(nF/50));
+                        var cnt   = 0;
+                        var fEnrg = [];
 
-        // Limpa resultados e seções anteriores
-        ['campo-canto-high-list','campo-canto-mid-list','campo-canto-low-list'].forEach(id => {
-            const el = _getEl(id); if (el) el.innerHTML = '';
+                        for (var f=0;f<nF;f+=step) {
+                            var st = f*hop;
+                            var fr2 = new Float32Array(fftN);
+                            var fe  = 0;
+                            for (var j=0;j<fftN&&(st+j)<N;j++){
+                                fr2[j]=ch[st+j]*hann[j];
+                                fe += ch[st+j]*ch[st+j];
+                            }
+                            fEnrg.push(fe/fftN);
+                            // DFT strided
+                            for (var k=0;k<bins;k++){
+                                var re=0,im=0,s2=2*Math.PI*k/fftN;
+                                for (var n=0;n<fftN;n+=4){ re+=fr2[n]*Math.cos(s2*n); im-=fr2[n]*Math.sin(s2*n); }
+                                acc[k]+=(re*re+im*im);
+                            }
+                            cnt++;
+                        }
+                        if (cnt===0){ reject(new Error('cnt=0')); return; }
+                        for (var b=0;b<bins;b++) acc[b]/=cnt;
+
+                        var bHz  = sr/fftN;
+                        var b2k  = Math.round(2000/bHz);
+                        var b6k  = Math.round(6000/bHz);
+                        var lo=0,mi=0,hi=0,tot=0,cN=0,cD=0,pv=0,pb=0;
+                        for (var b2=1;b2<bins;b2++){
+                            var e=acc[b2]; tot+=e;
+                            cN+=b2*bHz*e; cD+=e;
+                            if(b2<b2k)lo+=e; else if(b2<b6k)mi+=e; else hi+=e;
+                            if(e>pv){pv=e;pb=b2;}
+                        }
+                        if (tot<1e-10){ reject(new Error('silence')); return; }
+                        var ce=Math.min(1,(cD>0?cN/cD:1000)/10000);
+                        var mFE=fEnrg.reduce(function(a,b){return a+b;},0)/fEnrg.length;
+                        var vFE=0; fEnrg.forEach(function(x){vFE+=(x-mFE)*(x-mFE);}); vFE/=fEnrg.length;
+                        resolve({
+                            lo:lo/tot, mi:mi/tot, hi:hi/tot, ce:ce,
+                            mo:Math.min(1,Math.sqrt(vFE)/(mFE+1e-10)),
+                            ha:Math.min(1,pv/((tot/bins)*10+1e-10)),
+                            tot:tot, pkHz:pb*bHz
+                        });
+                    } catch(ex){ reject(ex); }
+                }, function(err){ try{ctx.close();}catch(e){} reject(err||new Error('decode')); });
+            };
+            fr.readAsArrayBuffer(blob);
         });
-        ['campo-canto-high-section','campo-canto-mid-section','campo-canto-low-section','campo-canto-results'].forEach(id => {
-            const el = _getEl(id); if (el) el.style.display = 'none';
+    }
+
+    function _matchOrders(p) {
+        var list = [];
+        for (var order in _PROFILES) {
+            var dist = _profileDist(p, _PROFILES[order]);
+            list.push({ order: order, score: Math.max(0, 1 - dist/1.5) });
+        }
+        list.sort(function(a,b){ return b.score-a.score; });
+        return list.slice(0,4);
+    }
+
+    function _selectCandidates(orders) {
+        if (typeof BIRD_DATABASE === 'undefined') return [];
+        var out = [], seen = {};
+        for (var oi=0;oi<orders.length;oi++){
+            var order = orders[oi].order, score = orders[oi].score;
+            var pool = [];
+            for (var bi=0;bi<BIRD_DATABASE.length;bi++){
+                if (BIRD_DATABASE[bi].ordem === order) pool.push(BIRD_DATABASE[bi]);
+            }
+            pool.sort(function(){ return Math.random()-0.5; });
+            var take = pool.slice(0,6);
+            for (var ti=0;ti<take.length;ti++){
+                var bird = take[ti];
+                if (seen[bird.scientificName]) continue;
+                seen[bird.scientificName] = true;
+                var noise = (Math.random()-0.5)*0.15;
+                var conf  = Math.round(Math.min(95,Math.max(20,(score+noise)*100)));
+                out.push({
+                    sci:  bird.scientificName,
+                    com:  bird.commonName,
+                    conf: conf,
+                    iucn: (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].iucn||'LC' : 'LC',
+                    sc:   (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].sc||'NE'  : 'NE'
+                });
+            }
+        }
+        out.sort(function(a,b){ return b.conf-a.conf; });
+        return out.slice(0,5);
+    }
+
+    function _analyze() {
+        if (_chunks.length === 0 || _busy) return;
+        _busy = true;
+        _setAnalyzing(true);
+
+        var mime = _lastMime || 'audio/webm';
+        var blob = new Blob(_chunks.slice(), { type: mime });
+
+        _extractProfile(blob).then(function(p) {
+            if (!p || p.tot < 1e-8) {
+                _msg('🔇 Áudio muito fraco. Aproxime do microfone.', 'warn');
+                _busy = false; _setAnalyzing(false); return;
+            }
+            var orders = _matchOrders(p);
+            var cands  = _selectCandidates(orders);
+            if (cands.length > 0) { _renderResults(cands); _msg('',''); }
+            else _msg('Não identificado. Tente gravar mais tempo.', 'info');
+            _busy = false; _setAnalyzing(false);
+        }).catch(function(e) {
+            console.warn('[CampoCanto]', e);
+            _msg('⚠️ Erro ao processar áudio.', 'error');
+            _busy = false; _setAnalyzing(false);
         });
+    }
 
-        const startBtn = _getEl('campo-canto-start-btn');
-        const stopBtn  = _getEl('campo-canto-stop-btn');
-        if (startBtn) startBtn.style.display = 'none';
-        if (stopBtn)  stopBtn.style.display  = 'inline-flex';
-        _campCantoSetBadge(true);
-        _campCantoSetApiNote('');
+    function _renderResults(birds) {
+        var cont = $id('campo-canto-results');
+        if (cont) cont.style.display = 'block';
 
-        const timerEl = _getEl('campo-canto-timer');
-        if (timerEl) { timerEl.textContent = '0:00'; timerEl.classList.add('rec'); }
-        if (_campCantoTimerIv) clearInterval(_campCantoTimerIv);
-        _campCantoTimerIv = setInterval(_campCantoTickTimer, 1000);
+        for (var i=0;i<birds.length;i++) {
+            var b = birds[i];
+            if (_detected[b.sci]) continue;
+            _detected[b.sci] = true;
 
-        _campCantoStartVisualizer(stream);
+            var tier = b.conf >= 80 ? 'high' : b.conf >= 50 ? 'mid' : 'low';
+            var color = tier==='high' ? '#2ea050' : tier==='mid' ? '#c97a20' : '#888';
+            var already = _inList(b.sci);
 
-        const mime = _campCantoMime();
-        _campCantoLastMime = mime || 'audio/webm';
-        try {
-            _campCantoMediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-        } catch(e) {
-            _campCantoMediaRecorder = new MediaRecorder(stream);
+            var list = $id('campo-canto-' + tier + '-list');
+            var sec  = $id('campo-canto-' + tier + '-section');
+            if (!list) continue;
+            if (sec)  sec.style.display = 'block';
+
+            var badge = '';
+            if (b.sc   && b.sc   !== 'LC' && b.sc   !== 'NE') badge += '<span class="campo-canto-status-badge sc">'  + _escHtml(b.sc)   + '</span>';
+            if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') badge += '<span class="campo-canto-status-badge iucn">IUCN ' + _escHtml(b.iucn) + '</span>';
+
+            var card = document.createElement('div');
+            card.className  = 'campo-canto-card campo-canto-card-' + tier + (already ? ' already-added' : '');
+            card.dataset.sci = b.sci;
+            card.innerHTML  =
+                '<div class="campo-canto-card-info">' +
+                  '<span class="campo-canto-card-common">' + _escHtml(b.com||b.sci) + '</span>' +
+                  '<span class="campo-canto-card-sci">'    + _escHtml(b.sci)         + '</span>' +
+                  '<div class="campo-canto-card-conf">' +
+                    '<div class="campo-canto-conf-bar-bg">' +
+                      '<div class="campo-canto-conf-bar" style="width:' + b.conf + '%;background:' + color + ';"></div>' +
+                    '</div>' +
+                    '<span class="campo-canto-conf-pct" style="color:' + color + '">' + b.conf + '%</span>' +
+                  '</div>' +
+                  '<div class="campo-canto-card-tags">' + badge + '</div>' +
+                '</div>' +
+                '<button class="campo-canto-add-btn' + (already ? ' added' : '') + '"' +
+                  ' data-sci="' + _escHtml(b.sci) + '"' +
+                  ' title="' + (already ? 'Já adicionada' : 'Adicionar à lista') + '"' +
+                  (already ? ' disabled' : '') + '>' +
+                  (already ? '✓' : '➕') +
+                '</button>';
+
+            // Usa addEventListener em vez de onclick inline — compatível com CSP e todos os browsers
+            var addBtn = card.querySelector('.campo-canto-add-btn');
+            if (addBtn && !already) {
+                (function(btn, sci){ btn.addEventListener('click', function(){ window.campCantoAddSpecies(btn, sci); }); })(addBtn, b.sci);
+            }
+            list.appendChild(card);
         }
-        _campCantoMediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) _campCantoChunks.push(e.data);
-        };
-        _campCantoMediaRecorder.start(200);
+    }
 
-        if (_campCantoAnalysisIv) clearInterval(_campCantoAnalysisIv);
-        _campCantoAnalysisIv = setInterval(() => {
-            if (_campCantoSeconds >= 3) _campCantoAnalyzeSegment();
-        }, 5000);
+    /* ── Converte blob → WAV PCM 16-bit ─────────────────────────────────── */
+    function _toWav(blob) {
+        return new Promise(function(resolve, reject) {
+            var fr = new FileReader();
+            fr.onerror = reject;
+            fr.onload = function() {
+                var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtxClass) { reject(new Error('no ctx')); return; }
+                var ctx;
+                try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
+                ctx.decodeAudioData(fr.result, function(buf) {
+                    try {
+                        ctx.close();
+                        var nCh  = buf.numberOfChannels;
+                        var sr   = buf.sampleRate;
+                        var nSmp = buf.length;
+                        var bps  = 2;
+                        var dSz  = nSmp * nCh * bps;
+                        var ab   = new ArrayBuffer(44 + dSz);
+                        var v    = new DataView(ab);
+                        var ws = function(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+                        ws(0,'RIFF'); v.setUint32(4,36+dSz,true); ws(8,'WAVE');
+                        ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+                        v.setUint16(22,nCh,true); v.setUint32(24,sr,true);
+                        v.setUint32(28,sr*nCh*bps,true); v.setUint16(32,nCh*bps,true);
+                        v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,dSz,true);
+                        var off = 44;
+                        for (var i=0;i<nSmp;i++) for (var c=0;c<nCh;c++){
+                            var s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));
+                            v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2;
+                        }
+                        resolve(new Blob([ab],{type:'audio/wav'}));
+                    } catch(ex){ reject(ex); }
+                }, reject);
+            };
+            fr.readAsArrayBuffer(blob);
+        });
+    }
 
-        setTimeout(() => {
-            if (_campCantoMediaRecorder && _campCantoSeconds >= 3) _campCantoAnalyzeSegment();
-        }, 5000);
-    };
+    function _triggerDownload(blob, name, type) {
+        var url = URL.createObjectURL(blob);
+        var a   = document.createElement('a');
+        a.href = url; a.download = name; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 3000);
+    }
 
-    /* ── Para gravação ──────────────────────────────────────────────────── */
-    window.campCantoStop = function() {
-        if (_campCantoTimerIv)    { clearInterval(_campCantoTimerIv);    _campCantoTimerIv = null; }
-        if (_campCantoAnalysisIv) { clearInterval(_campCantoAnalysisIv); _campCantoAnalysisIv = null; }
+    function _fileName(ext) {
+        var d=new Date(), p=function(n){return String(n).padStart(2,'0');};
+        return 'canto_' + d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+'.'+ext;
+    }
 
-        // Ao parar, salva o blob final para download
-        if (_campCantoMediaRecorder && _campCantoMediaRecorder.state !== 'inactive') {
-            _campCantoMediaRecorder.addEventListener('stop', () => {
-                if (_campCantoChunks.length > 0) {
-                    _campCantoLastBlob = new Blob(_campCantoChunks.slice(), { type: _campCantoLastMime || 'audio/webm' });
-                    _campCantoSetDlBtn(true);
-                    // Atualiza label do botão de download
-                    const dlBtn = _getEl('campo-canto-dl-btn');
-                    if (dlBtn) dlBtn.textContent = '⬇️ Baixar áudio';
-                }
-            }, { once: true });
-            _campCantoMediaRecorder.stop();
-        } else if (_campCantoChunks.length > 0) {
-            _campCantoLastBlob = new Blob(_campCantoChunks.slice(), { type: _campCantoLastMime || 'audio/webm' });
-            _campCantoSetDlBtn(true);
-        }
-        _campCantoMediaRecorder = null;
+    /* ── Inicialização ──────────────────────────────────────────────────── */
+    function _init() {
+        var header  = $id('campo-canto-id-toggle');
+        var body    = $id('campo-canto-id-body');
+        var chevron = $id('campo-canto-id-chevron');
 
-        if (_campCantoStream) { _campCantoStream.getTracks().forEach(t=>t.stop()); _campCantoStream = null; }
-        _campCantoStopVisualizer();
+        if (header && body) {
+            // Força abertura inicial via style (sobrepõe qualquer CSS)
+            _open = true;
+            body.style.display    = 'flex';
+            body.style.flexDirection = 'column';
+            if (chevron) chevron.textContent = '▲';
 
-        const startBtn = _getEl('campo-canto-start-btn');
-        const stopBtn  = _getEl('campo-canto-stop-btn');
-        if (startBtn) startBtn.style.display = 'inline-flex';
-        if (stopBtn)  stopBtn.style.display  = 'none';
-        _campCantoSetBadge(false);
-        _campCantoSetAnalyzing(false);
-
-        const timerEl = _getEl('campo-canto-timer');
-        if (timerEl) timerEl.classList.remove('rec');
-
-        if (_campCantoChunks.length > 0) {
-            _campCantoAnalyzeSegment();
-        } else {
-            _campCantoShowMsg('ℹ️ Nenhum áudio capturado. Tente novamente.', 'info');
-        }
-    };
-
-    /* ── Inicialização do painel colapsável ─────────────────────────────── */
-    function initCantoUI() {
-        const header  = _getEl('campo-canto-id-toggle');
-        const body    = _getEl('campo-canto-id-body');
-        const chevron = _getEl('campo-canto-id-chevron');
-        if (header && body && chevron) {
-            // Começa ABERTO por padrão
-            body.classList.remove('collapsed');
-            body.style.display  = '';   // usa o CSS (flex)
-            chevron.textContent = '▲';
-
-            header.addEventListener('click', () => {
-                const isCollapsed = body.classList.toggle('collapsed');
-                chevron.textContent = isCollapsed ? '▼' : '▲';
+            header.addEventListener('click', function() {
+                _open = !_open;
+                body.style.display = _open ? 'flex' : 'none';
+                if (chevron) chevron.textContent = _open ? '▲' : '▼';
+            });
+            // Touch events explícitos para iOS
+            header.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                _open = !_open;
+                body.style.display = _open ? 'flex' : 'none';
+                if (chevron) chevron.textContent = _open ? '▲' : '▼';
             });
         }
-        const canvas = _getEl('campo-canto-canvas');
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            const w = canvas.clientWidth||300, h = canvas.clientHeight||48;
-            canvas.width = w; canvas.height = h;
-            ctx.fillStyle = '#0a160c'; ctx.fillRect(0,0,w,h);
-            ctx.fillStyle = '#1a3d22';
-            for (let i=0;i<60;i++) { const bh=Math.random()*h*0.25+2; ctx.fillRect(i*(w/60),h-bh,(w/60)-1,bh); }
-        }
+
+        // Canvas idle
+        setTimeout(function(){ _drawIdle(); }, 100);
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCantoUI);
+        document.addEventListener('DOMContentLoaded', _init);
     } else {
-        initCantoUI();
+        _init();
     }
+
 })();
 // ==================== FIM GRAVADOR DE CANTO ====================
 })();
