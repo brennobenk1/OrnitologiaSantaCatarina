@@ -14160,13 +14160,15 @@ if (document.readyState === 'loading') {
         const body    = _getEl('campo-canto-id-body');
         const chevron = _getEl('campo-canto-id-chevron');
         if (header && body && chevron) {
+            // Começa ABERTO por padrão
+            body.classList.remove('collapsed');
+            body.style.display  = '';   // usa o CSS (flex)
+            chevron.textContent = '▲';
+
             header.addEventListener('click', () => {
-                const isHidden = body.style.display === 'none';
-                body.style.display = isHidden ? 'flex' : 'none';
-                chevron.textContent = isHidden ? '▼' : '▲';
+                const isCollapsed = body.classList.toggle('collapsed');
+                chevron.textContent = isCollapsed ? '▼' : '▲';
             });
-            body.style.display  = 'flex';
-            chevron.textContent = '▼';
         }
         const canvas = _getEl('campo-canto-canvas');
         if (canvas) {
