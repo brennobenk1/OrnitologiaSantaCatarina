@@ -13118,60 +13118,147 @@ function exportXLS() {
     document.head.appendChild(s);
 }
 
-/* ── Export PDF ──────────────────────────────── */
+/* ── Export PDF (com imagem do mapa) ─────────── */
 function exportPDF() {
     var rows = buildRows();
     if (!rows.length) { alert('Nenhum registro para exportar.'); return; }
     if (!window.jspdf) { alert('jsPDF não carregado.'); return; }
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    /* Title */
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(13);
-    doc.setTextColor(27, 94, 32);
-    doc.text('Registros de Campo — Ornitologia SC', 14, 14);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(8);
-    doc.setTextColor(100,100,100);
-    doc.text('Gerado em: ' + new Date().toLocaleString('pt-BR') + '  |  Total de linhas: ' + rows.length, 14, 20);
+    var mapEl = document.getElementById('campo-map');
+    var hasMap = mapEl && typeof window.html2canvas === 'function' &&
+                 typeof campoMap !== 'undefined' && campoMap !== null &&
+                 rows.some(function(r){ return r.coords && r.coords !== '—'; });
 
-    /* Table */
-    var cols  = ['N\u00b0', 'Data', 'Hor\u00e1rio', 'Nome popular', 'Nome cient\u00edfico', 'V/C', 'Temp.', 'Coordenadas'];
-    var widths= [11, 21, 17, 44, 52, 13, 16, 56];
-    var xs = []; var cx = 14;
-    widths.forEach(function(w){ xs.push(cx); cx += w; });
-    var y = 26;
+    function _buildPDF(mapDataUrl) {
+        var jsPDF = window.jspdf.jsPDF;
+        var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        var PW = 297, PH = 210;
 
-    /* Header */
-    doc.setFillColor(27, 94, 32);
-    doc.rect(14, y, cx-14, 7, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(7.5);
-    cols.forEach(function(h, i){ doc.text(h, xs[i]+1, y+4.8); });
-    y += 7;
+        /* ── Página 1: Tabela de registros ── */
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(13);
+        doc.setTextColor(27, 94, 32);
+        doc.text('Registros de Campo — Ornitologia SC', 14, 14);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100,100,100);
+        doc.text('Gerado em: ' + new Date().toLocaleString('pt-BR') + '  |  Total: ' + rows.length + ' registro(s)', 14, 20);
 
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(7);
-    rows.forEach(function(row, ri) {
-        if (y > 192) { doc.addPage(); y = 14; }
-        if (ri % 2 === 0) { doc.setFillColor(241,248,233); doc.rect(14, y, cx-14, 6.2, 'F'); }
-        doc.setTextColor(30,30,30);
-        var cells = [String(row.num), row.date, row.time, row.commonName, row.scientName, row.vc, row.temp, row.coords];
-        cells.forEach(function(cell, i) {
-            var txt = String(cell||'');
-            var maxPx = widths[i] - 2;
-            /* crude truncation */
-            while (doc.getTextWidth(txt) > maxPx && txt.length > 2) txt = txt.slice(0,-1);
-            doc.text(txt, xs[i]+1, y+4.2);
+        var cols   = ['N°','Data','Horário','Nome popular','Nome científico','V/C','Temp.','Coordenadas'];
+        var widths = [11, 21, 17, 44, 52, 13, 16, 56];
+        var xs = [], cx = 14;
+        widths.forEach(function(w){ xs.push(cx); cx += w; });
+        var y = 26;
+
+        doc.setFillColor(27, 94, 32);
+        doc.rect(14, y, cx-14, 7, 'F');
+        doc.setTextColor(255,255,255);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(7.5);
+        cols.forEach(function(h, i){ doc.text(h, xs[i]+1, y+4.8); });
+        y += 7;
+
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(7);
+        rows.forEach(function(row, ri) {
+            if (y > 192) { doc.addPage(); y = 14; }
+            if (ri % 2 === 0) { doc.setFillColor(241,248,233); doc.rect(14, y, cx-14, 6.2, 'F'); }
+            doc.setTextColor(30,30,30);
+            var cells = [String(row.num), row.date, row.time, row.commonName, row.scientName, row.vc, row.temp, row.coords];
+            cells.forEach(function(cell, i) {
+                var txt = String(cell||'');
+                while (doc.getTextWidth(txt) > widths[i]-2 && txt.length > 2) txt = txt.slice(0,-1);
+                doc.text(txt, xs[i]+1, y+4.2);
+            });
+            doc.setDrawColor(200,228,200);
+            doc.line(14, y+6.2, cx, y+6.2);
+            y += 6.2;
         });
-        doc.setDrawColor(200,228,200);
-        doc.line(14, y+6.2, cx, y+6.2);
-        y += 6.2;
-    });
 
-    doc.save('registros_campo_' + new Date().toISOString().slice(0,10) + '.pdf');
+        /* ── Página do mapa (se disponível) ── */
+        if (mapDataUrl) {
+            doc.addPage();
+            var margin = 14;
+            var imgW   = PW - margin * 2;   // 269 mm
+            var imgH   = PH - margin * 2 - 20; // reserva 20mm para título
+
+            /* Título */
+            doc.setFont('helvetica','bold');
+            doc.setFontSize(12);
+            doc.setTextColor(27, 94, 32);
+            doc.text('Mapa de Registros — Ornitologia SC', margin, margin + 6);
+            doc.setFont('helvetica','normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(100,100,100);
+            var withCoords = rows.filter(function(r){ return r.coords && r.coords !== '—'; }).length;
+            doc.text(withCoords + ' ponto(s) com coordenadas GPS', margin, margin + 11);
+
+            /* Borda verde ao redor do mapa */
+            doc.setDrawColor(27, 94, 32);
+            doc.setLineWidth(0.5);
+            doc.rect(margin, margin + 14, imgW, imgH);
+
+            /* Imagem do mapa */
+            try {
+                doc.addImage(mapDataUrl, 'PNG', margin, margin + 14, imgW, imgH);
+            } catch(e) {
+                doc.setFontSize(9);
+                doc.setTextColor(150,150,150);
+                doc.text('(Imagem do mapa indisponível)', margin + imgW/2, margin + 14 + imgH/2, { align: 'center' });
+            }
+
+            /* Legenda de pontos */
+            var legY = margin + 14 + imgH + 4;
+            if (legY < PH - 4) {
+                doc.setFontSize(6.5);
+                doc.setTextColor(60,60,60);
+                doc.setFillColor(46,160,80);
+                doc.circle(margin + 2, legY + 1, 1.2, 'F');
+                doc.text('Ponto de observação com GPS', margin + 5, legY + 2);
+            }
+        }
+
+        doc.save('registros_campo_' + new Date().toISOString().slice(0,10) + '.pdf');
+    }
+
+    if (!hasMap) {
+        _buildPDF(null);
+        return;
+    }
+
+    /* Captura o mapa via html2canvas */
+    var btn = document.getElementById('campo-export-pdf');
+    if (btn) { btn.textContent = '⏳ Gerando…'; btn.disabled = true; }
+
+    /* Garante que o mapa esteja renderizado antes de capturar */
+    if (typeof campoMap !== 'undefined' && campoMap) {
+        try { campoMap.invalidateSize(); } catch(e){}
+    }
+
+    setTimeout(function() {
+        html2canvas(mapEl, {
+            useCORS:      true,
+            allowTaint:   true,
+            scale:        2,
+            backgroundColor: '#e8f5e9',
+            logging:      false,
+            ignoreElements: function(el) {
+                /* Ignora controles do Leaflet para imagem mais limpa */
+                return el.classList && (
+                    el.classList.contains('leaflet-control-container') ||
+                    el.classList.contains('leaflet-control-zoom')
+                );
+            }
+        }).then(function(canvas) {
+            var dataUrl = canvas.toDataURL('image/png');
+            _buildPDF(dataUrl);
+        }).catch(function(e) {
+            console.warn('[exportPDF] html2canvas falhou:', e);
+            _buildPDF(null);
+        }).finally(function() {
+            if (btn) { btn.textContent = '📄 Exportar PDF'; btn.disabled = false; }
+        });
+    }, 300);
 }
 
 /* ── Copy table ──────────────────────────────── */
@@ -13537,6 +13624,7 @@ if (document.readyState === 'loading') {
     valorSel.addEventListener('change', () => {
         if (valorSel.value) applyFilter();
     });
+})();
 
 
 
@@ -14234,7 +14322,6 @@ if (document.readyState === 'loading') {
 
 })();
 // ==================== FIM GRAVADOR DE CANTO ====================
-})();
 
 // ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
 (function initAcademicPDFReport() {
