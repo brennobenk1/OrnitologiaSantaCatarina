@@ -11115,6 +11115,160 @@ window.sortFenol = function(mode) {
     renderFenolTable(sorted);
 };
 
+    // ==================== CADEIA ALIMENTAR ====================
+    // Classifica a guilda de cada espécie em um nível trófico, do topo da cadeia
+    // (predadores) até a base (consumidores primários), seguindo o conceito de
+    // níveis tróficos de Lindeman (1942), com a base de dieta de aves obtida em
+    // Sick (1997), Wilman et al. (2014 - EltonTraits) e Sigrist (2014).
+    const FOODCHAIN_LEVELS = [
+        { key: 'topo',         nivel: 4, label: '🦅 Nível 4 — Predadores de Topo (Carnívoros / Piscívoros / Cleptoparasitas)', match: ['Carnívoro', 'Piscívoro', 'Cleptoparasita'], color: '#c0392b' },
+        { key: 'decompositor', nivel: 1, label: '♻️ Decompositores / Detritívoros (reciclagem de matéria orgânica)',          match: ['Detritívoro'],                              color: '#7f5539' },
+        { key: 'secundario',   nivel: 3, label: '🐦 Nível 3 — Consumidores Secundários (Insetívoros / Onívoros / Malacófagos)', match: ['Insetívoro', 'Onívoro', 'Malacófago'],     color: '#e67e22' },
+        { key: 'primario',     nivel: 2, label: '🌱 Nível 2 — Consumidores Primários (Herbívoros / Frugívoros / Granívoros / Nectarívoros / Filtradores)', match: ['Herbívoro', 'Frugívoro', 'Granívoro', 'Nectarívoro', 'Filtrador'], color: '#27ae60' }
+    ];
+
+    function classifyFoodChainLevel(guildaStr) {
+        if (!guildaStr) return null;
+        for (const lvl of FOODCHAIN_LEVELS) {
+            if (lvl.match.some(m => guildaStr.includes(m))) return lvl;
+        }
+        return null;
+    }
+
+    function getImportedSpeciesListFoodChain() {
+        const set = [];
+        document.querySelectorAll('#table-body tr').forEach(tr => {
+            const spCell = tr.querySelector('td.species-col');
+            if (!spCell) return;
+            const inp = spCell.querySelector('input');
+            const val = (inp ? inp.value : spCell.textContent).trim();
+            if (val && !set.includes(val)) set.push(val);
+        });
+        return set;
+    }
+
+    function buildFoodChain() {
+        const species = getImportedSpeciesListFoodChain();
+        const emptyMsg = document.getElementById('foodchain-empty-msg');
+        const statsRow = document.getElementById('foodchain-stats-row');
+        const diagramEl = document.getElementById('foodchain-diagram');
+        const tbody = document.getElementById('foodchain-table-body');
+        if (!diagramEl || !tbody) return;
+
+        if (species.length === 0) {
+            if (emptyMsg) emptyMsg.style.display = 'block';
+            if (statsRow) statsRow.innerHTML = '';
+            diagramEl.innerHTML = '';
+            tbody.innerHTML = '';
+            return;
+        }
+        if (emptyMsg) emptyMsg.style.display = 'none';
+
+        // Classificar cada espécie importada
+        const grouped = {}; // key -> [{especie, info, lvl}]
+        FOODCHAIN_LEVELS.forEach(l => grouped[l.key] = []);
+        const semClassificacao = [];
+
+        species.forEach(sp => {
+            const info = GUILDA_DB[sp];
+            if (!info) { semClassificacao.push(sp); return; }
+            const lvl = classifyFoodChainLevel(info.guilda);
+            if (!lvl) { semClassificacao.push(sp); return; }
+            grouped[lvl.key].push({ especie: sp, info, lvl });
+        });
+
+        // Estatísticas rápidas
+        if (statsRow) {
+            const total = species.length;
+            const classificadas = total - semClassificacao.length;
+            statsRow.innerHTML = `
+                <div style="background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-md); padding:12px 18px; box-shadow:var(--shadow-soft); min-width:150px;">
+                    <div style="font-size:12px; color:var(--text-muted);">Espécies importadas</div>
+                    <div style="font-size:22px; font-weight:700; color:var(--green-deep);">${total}</div>
+                </div>
+                <div style="background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-md); padding:12px 18px; box-shadow:var(--shadow-soft); min-width:150px;">
+                    <div style="font-size:12px; color:var(--text-muted);">Classificadas na cadeia</div>
+                    <div style="font-size:22px; font-weight:700; color:var(--green-deep);">${classificadas}</div>
+                </div>
+                <div style="background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-md); padding:12px 18px; box-shadow:var(--shadow-soft); min-width:150px;">
+                    <div style="font-size:12px; color:var(--text-muted);">Níveis tróficos presentes</div>
+                    <div style="font-size:22px; font-weight:700; color:var(--green-deep);">${FOODCHAIN_LEVELS.filter(l => grouped[l.key].length > 0).length} / 4</div>
+                </div>`;
+        }
+
+        // Ordenar níveis do topo (4) para a base (1), exceto decompositor que aparece à parte
+        const ordemVisual = ['topo', 'secundario', 'primario', 'decompositor'];
+
+        // Diagrama visual: pirâmide de faixas empilhadas + setas de fluxo de energia
+        let diagramHtml = `<div style="display:flex; flex-direction:column; align-items:stretch; gap:0; max-width:900px; margin:0 auto;">`;
+        ordemVisual.forEach((key, idx) => {
+            const lvlDef = FOODCHAIN_LEVELS.find(l => l.key === key);
+            const items = grouped[key];
+            if (items.length === 0 && key === 'decompositor') return; // só mostra decompositor se houver
+            const widthPct = key === 'decompositor' ? 100 : (key === 'topo' ? 55 : key === 'secundario' ? 78 : 100);
+            const chips = items.length > 0
+                ? items.map(it => `<span style="display:inline-block; background:rgba(255,255,255,0.92); color:${lvlDef.color}; border:1.5px solid ${lvlDef.color}; border-radius:14px; padding:3px 11px; margin:3px; font-size:12px; font-weight:600;">${it.especie}</span>`).join('')
+                : `<span style="font-size:12px; color:rgba(255,255,255,0.85); font-style:italic;">— nenhuma espécie importada neste nível —</span>`;
+            diagramHtml += `
+                <div style="align-self:center; width:${widthPct}%; background:${lvlDef.color}; border-radius:10px; padding:12px 16px; margin-bottom:${key === 'secundario' ? '0' : '6px'}; box-shadow:0 2px 6px rgba(0,0,0,0.12);">
+                    <div style="color:white; font-weight:700; font-size:13px; margin-bottom:6px;">${lvlDef.label} <span style="opacity:0.85; font-weight:500;">(${items.length})</span></div>
+                    <div>${chips}</div>
+                </div>`;
+            if (idx < ordemVisual.length - 1 && key !== 'decompositor') {
+                diagramHtml += `<div style="align-self:center; font-size:20px; color:var(--green-deep); margin:2px 0;">⬆ fluxo de energia</div>`;
+            }
+        });
+        diagramHtml += `</div>`;
+        if (semClassificacao.length > 0) {
+            diagramHtml += `<div style="margin-top:16px; font-size:12.5px; color:var(--text-muted); text-align:center;">⚠️ Sem dados de guilda para classificação: ${semClassificacao.join(', ')}</div>`;
+        }
+        diagramEl.innerHTML = diagramHtml;
+
+        // Tabela detalhada (do topo para a base)
+        tbody.innerHTML = '';
+        ordemVisual.forEach(key => {
+            const lvlDef = FOODCHAIN_LEVELS.find(l => l.key === key);
+            grouped[key].forEach(it => {
+                const popular = (typeof getPopularName === 'function') ? (getPopularName(it.especie) || '—') : '—';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${lvlDef.color}; margin-right:6px;"></span>${lvlDef.label.split('—')[0].trim()}</td>
+                    <td><em>${it.especie}</em></td>
+                    <td>${popular}</td>
+                    <td>${it.info.guilda}</td>
+                    <td>${it.info.descricao}</td>`;
+                tbody.appendChild(tr);
+            });
+        });
+    }
+    window.buildFoodChain = buildFoodChain;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('foodchain-export-csv')?.addEventListener('click', () => {
+            const rows = [...document.querySelectorAll('#foodchain-table-body tr')];
+            const csv = ['Nivel Trofico,Especie,Nome Popular,Guilda,Descricao'];
+            rows.forEach(tr => {
+                const cells = [...tr.querySelectorAll('td')].map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"');
+                csv.push(cells.join(','));
+            });
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'cadeia_alimentar_SC.csv'; a.click();
+        });
+        document.getElementById('foodchain-copy')?.addEventListener('click', () => {
+            const rows = [...document.querySelectorAll('#foodchain-table-body tr')];
+            const text = ['Nível Trófico\tEspécie\tNome Popular\tGuilda\tDescrição'];
+            rows.forEach(tr => { text.push([...tr.querySelectorAll('td')].map(td => td.textContent.trim()).join('\t')); });
+            navigator.clipboard.writeText(text.join('\n'));
+        });
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.tab === 'foodchain-section') buildFoodChain();
+            });
+        });
+    });
+    // ==================== FIM CADEIA ALIMENTAR ====================
+
 function renderFenolAnalysis(entries) {
     const el = document.getElementById('fenol-analysis');
     if (!el || !entries.length) return;
