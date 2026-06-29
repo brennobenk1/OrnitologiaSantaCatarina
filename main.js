@@ -12854,6 +12854,162 @@ var campoSelectedBird = null;
 var _tempTimer     = null;
 var _vcSyncing     = false;
 
+/* ── NOVO: Rastreamento de rota em tempo real ("Iniciar Campo") ──── */
+var trackActive      = false;
+var trackStartTime   = null;
+var trackEndTime     = null;
+var trackPoints      = [];   // [{lat,lng,t}]
+var trackPolyline    = null; // Leaflet polyline (azul)
+var trackTotalKm     = 0;
+var trackTimerIv      = null;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+    var R = 6371; // raio da Terra em km
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function formatElapsed(ms) {
+    var totalSec = Math.floor(ms / 1000);
+    var h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+    var m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+    var s = String(totalSec % 60).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+}
+
+function updateTrackUI() {
+    var badge = document.getElementById('campo-track-status-badge');
+    var timeEl = document.getElementById('campo-track-time');
+    var kmEl = document.getElementById('campo-track-km');
+    var ptsEl = document.getElementById('campo-track-points');
+    if (badge) {
+        badge.textContent = trackActive ? '🔴 Campo em andamento' : '⏸️ Campo não iniciado';
+        badge.style.color = trackActive ? '#c62828' : '#888';
+    }
+    if (timeEl) {
+        var elapsed = trackActive ? (Date.now() - trackStartTime) : (trackEndTime && trackStartTime ? (trackEndTime - trackStartTime) : 0);
+        timeEl.textContent = '⏱️ ' + formatElapsed(elapsed);
+    }
+    if (kmEl) kmEl.textContent = '📏 ' + trackTotalKm.toFixed(2).replace('.', ',') + ' km';
+    if (ptsEl) ptsEl.textContent = '📍 ' + trackPoints.length + ' pontos de rota';
+}
+
+function campTrackStart() {
+    trackActive = true;
+    trackStartTime = Date.now();
+    trackEndTime = null;
+    trackPoints = [];
+    trackTotalKm = 0;
+    if (campoMap) {
+        if (trackPolyline) { try { campoMap.removeLayer(trackPolyline); } catch(e){} }
+        trackPolyline = L.polyline([], { color: '#1565C0', weight: 4, opacity: 0.85 }).addTo(campoMap);
+    }
+    // Se já houver posição GPS conhecida, usa como primeiro ponto da rota
+    if (campoCurrentGPS) {
+        trackPoints.push({ lat: campoCurrentGPS.lat, lng: campoCurrentGPS.lng, t: Date.now() });
+        if (trackPolyline) trackPolyline.setLatLngs(trackPoints.map(function(p){ return [p.lat, p.lng]; }));
+    }
+    var startBtn = document.getElementById('campo-track-start-btn');
+    var stopBtn  = document.getElementById('campo-track-stop-btn');
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = '';
+    if (trackTimerIv) clearInterval(trackTimerIv);
+    trackTimerIv = setInterval(updateTrackUI, 1000);
+    updateTrackUI();
+}
+
+function campTrackStop() {
+    trackActive = false;
+    trackEndTime = Date.now();
+    if (trackTimerIv) { clearInterval(trackTimerIv); trackTimerIv = null; }
+    var startBtn = document.getElementById('campo-track-start-btn');
+    var stopBtn  = document.getElementById('campo-track-stop-btn');
+    if (startBtn) startBtn.style.display = '';
+    if (stopBtn) stopBtn.style.display = 'none';
+    updateTrackUI();
+
+    // Mostra modal perguntando se deseja baixar os dados do campo
+    var modal = document.getElementById('campo-track-finish-modal');
+    var summary = document.getElementById('campo-track-finish-summary');
+    if (summary) {
+        var dur = formatElapsed(trackEndTime - trackStartTime);
+        summary.innerHTML = '⏱️ Duração: <strong>' + dur + '</strong> · 📏 Distância percorrida: <strong>' +
+            trackTotalKm.toFixed(2).replace('.', ',') + ' km</strong> · 🔭 Espécies registradas: <strong>' + campoRecords.length + '</strong>';
+    }
+    if (modal) modal.style.display = 'flex';
+}
+window.campTrackStart = campTrackStart;
+window.campTrackStop  = campTrackStop;
+
+/* Chamado a cada atualização de GPS (ver onGPSSuccess) para alimentar a rota */
+function campTrackFeedGPS(lat, lng) {
+    if (!trackActive) return;
+    var last = trackPoints.length ? trackPoints[trackPoints.length - 1] : null;
+    if (last) {
+        var d = haversineKm(last.lat, last.lng, lat, lng);
+        // Ignora ruído de GPS parado (< 2 m) para não inflar a quilometragem
+        if (d > 0.002) trackTotalKm += d;
+        else return;
+    }
+    trackPoints.push({ lat: lat, lng: lng, t: Date.now() });
+    if (trackPolyline) trackPolyline.setLatLngs(trackPoints.map(function(p){ return [p.lat, p.lng]; }));
+    updateTrackUI();
+}
+
+/* Exporta dados completos do campo: resumo da rota + tabela de registros com km */
+function exportCampoTrackData() {
+    var rows = buildRows();
+    var durMs = (trackEndTime || Date.now()) - (trackStartTime || Date.now());
+    function doExport(XLSX) {
+        var wb = XLSX.utils.book_new();
+
+        // Aba 1: Resumo do campo
+        var resumo = [
+            ['Resumo do Campo'],
+            ['Início', trackStartTime ? new Date(trackStartTime).toLocaleString('pt-BR') : '--'],
+            ['Término', trackEndTime ? new Date(trackEndTime).toLocaleString('pt-BR') : '--'],
+            ['Duração', formatElapsed(durMs)],
+            ['Distância total percorrida (km)', trackTotalKm.toFixed(3).replace('.', ',')],
+            ['Pontos de rota registrados', trackPoints.length],
+            ['Total de espécies registradas', campoRecords.length]
+        ];
+        var wsResumo = XLSX.utils.aoa_to_sheet(resumo);
+        wsResumo['!cols'] = [{wch:32},{wch:24}];
+        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+        // Aba 2: Registros (com km percorrido)
+        var header = ['N° Amostragem','DATA','Horario','Nome popular','Nome cientifico','Avistado ou Canto(V/C)?','Temperatura','Coordenadas','Km percorrido até o ponto','Km desde o registro anterior'];
+        var data = [header].concat(rows.map(function(r) {
+            return [r.num, r.date, r.time, r.commonName, r.scientName, r.vc, r.temp, r.coords, r.kmAcumulado, r.kmDesdeAnterior];
+        }));
+        var wsReg = XLSX.utils.aoa_to_sheet(data);
+        wsReg['!cols'] = [10,14,12,30,36,22,14,34,16,18].map(function(w){ return {wch:w}; });
+        XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');
+
+        // Aba 3: Pontos da rota (track GPS bruto)
+        var trackHeader = ['#','Latitude','Longitude','Horário'];
+        var trackData = [trackHeader].concat(trackPoints.map(function(p, i) {
+            return [i+1, p.lat.toFixed(6), p.lng.toFixed(6), new Date(p.t).toLocaleTimeString('pt-BR')];
+        }));
+        var wsTrack = XLSX.utils.aoa_to_sheet(trackData);
+        XLSX.utils.book_append_sheet(wb, wsTrack, 'Rota GPS');
+
+        XLSX.writeFile(wb, 'dados_campo_completo_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    }
+    if (window.XLSX) { doExport(window.XLSX); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+    s.onload = function() { doExport(window.XLSX); };
+    s.onerror = function() { alert('Erro ao carregar a biblioteca Excel. Verifique sua conexão.'); };
+    document.head.appendChild(s);
+}
+window.exportCampoTrackData = exportCampoTrackData;
+
 /* ── Open / Close ──────────────────────────────── */
 function openCampo() {
     var ov = document.getElementById('campo-overlay');
@@ -12913,6 +13069,7 @@ function onGPSSuccess(pos) {
         }
     }
     fetchTemperature(lat, lng);
+    campTrackFeedGPS(lat, lng);
 }
 
 function onGPSError(err) {
@@ -13127,7 +13284,8 @@ function registerRecord() {
         temp: campoCurrentTemp,
         lat:  campoCurrentGPS ? campoCurrentGPS.lat : null,
         lng:  campoCurrentGPS ? campoCurrentGPS.lng : null,
-        qty:  qty
+        qty:  qty,
+        kmAtRecord: trackTotalKm  // km percorridos na rota até este ponto (0 se campo não iniciado)
     };
     campoRecords.push(rec);
 
@@ -13207,6 +13365,7 @@ function renderList() {
                 '<span class="campo-record-tag">📋 ' + r.vc + '</span>' +
                 '<span class="campo-record-tag">🌡️ ' + r.temp + '</span>' +
                 '<span class="campo-record-tag">📍 ' + escHtml(coords) + '</span>' +
+                '<span class="campo-record-tag">📏 ' + (typeof r.kmAtRecord === 'number' ? r.kmAtRecord.toFixed(2).replace('.', ',') : '0,00') + ' km</span>' +
             '</div>' +
             '<button class="campo-remove-btn" data-idx="' + idx + '" title="Remover">🗑️</button>' +
         '</div>';
@@ -13226,9 +13385,13 @@ function renderList() {
 /* ── Build expanded rows for export ─────────── */
 function buildRows() {
     var rows = []; var n = 0;
+    var prevKm = 0;
     campoRecords.forEach(function(r) {
         var qty = r.qty || 1;
         var coords = r.lat !== null ? r.lat.toFixed(6) + ', ' + r.lng.toFixed(6) : '--';
+        var kmAcum = (typeof r.kmAtRecord === 'number') ? r.kmAtRecord : 0;
+        var kmDesde = Math.max(0, kmAcum - prevKm);
+        prevKm = kmAcum;
         for (var i = 0; i < qty; i++) {
             n++;
             rows.push({
@@ -13239,7 +13402,9 @@ function buildRows() {
                 scientName: r.scientName,
                 vc:   r.vc,
                 temp: r.temp,
-                coords: coords
+                coords: coords,
+                kmAcumulado: kmAcum.toFixed(2).replace('.', ','),
+                kmDesdeAnterior: kmDesde.toFixed(2).replace('.', ',')
             });
         }
     });
@@ -13252,13 +13417,13 @@ function exportXLS() {
     if (!rows.length) { alert('Nenhum registro para exportar.'); return; }
     /* Lazy-load SheetJS if not present */
     function doExport(XLSX) {
-        var header = ['N\u00b0 Amostragem','DATA','Horario','Nome popular','Nome cientifico','Avistado ou Canto(V/C)?','Temperatura','Coordenadas'];
+        var header = ['N\u00b0 Amostragem','DATA','Horario','Nome popular','Nome cientifico','Avistado ou Canto(V/C)?','Temperatura','Coordenadas','Km percorrido até o ponto','Km desde o registro anterior'];
         var data = [header].concat(rows.map(function(r) {
-            return [r.num, r.date, r.time, r.commonName, r.scientName, r.vc, r.temp, r.coords];
+            return [r.num, r.date, r.time, r.commonName, r.scientName, r.vc, r.temp, r.coords, r.kmAcumulado, r.kmDesdeAnterior];
         }));
         var ws = XLSX.utils.aoa_to_sheet(data);
         /* Column widths */
-        ws['!cols'] = [10,14,12,30,36,22,14,34].map(function(w){ return {wch:w}; });
+        ws['!cols'] = [10,14,12,30,36,22,14,34,16,18].map(function(w){ return {wch:w}; });
         /* Style header row bold */
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Campo');
@@ -13298,8 +13463,8 @@ function exportPDF() {
         doc.setTextColor(100,100,100);
         doc.text('Gerado em: ' + new Date().toLocaleString('pt-BR') + '  |  Total: ' + rows.length + ' registro(s)', 14, 20);
 
-        var cols   = ['N°','Data','Horário','Nome popular','Nome científico','V/C','Temp.','Coordenadas'];
-        var widths = [11, 21, 17, 44, 52, 13, 16, 56];
+        var cols   = ['N°','Data','Horário','Nome popular','Nome científico','V/C','Temp.','Coordenadas','Km acum.','Km desde ant.'];
+        var widths = [9, 17, 14, 36, 42, 10, 13, 44, 16, 17];
         var xs = [], cx = 14;
         widths.forEach(function(w){ xs.push(cx); cx += w; });
         var y = 26;
@@ -13318,7 +13483,7 @@ function exportPDF() {
             if (y > 192) { doc.addPage(); y = 14; }
             if (ri % 2 === 0) { doc.setFillColor(241,248,233); doc.rect(14, y, cx-14, 6.2, 'F'); }
             doc.setTextColor(30,30,30);
-            var cells = [String(row.num), row.date, row.time, row.commonName, row.scientName, row.vc, row.temp, row.coords];
+            var cells = [String(row.num), row.date, row.time, row.commonName, row.scientName, row.vc, row.temp, row.coords, row.kmAcumulado + ' km', row.kmDesdeAnterior + ' km'];
             cells.forEach(function(cell, i) {
                 var txt = String(cell||'');
                 while (doc.getTextWidth(txt) > widths[i]-2 && txt.length > 2) txt = txt.slice(0,-1);
@@ -13419,9 +13584,9 @@ function exportPDF() {
 function copyTable() {
     var rows = buildRows();
     if (!rows.length) { alert('Nenhum registro para copiar.'); return; }
-    var header = 'N\u00b0 Amostragem\tDATA\tHorario\tNome popular\tNome cientifico\tAvistado ou Canto(V/C)?\tTemperatura\tCoordenadas';
+    var header = 'N\u00b0 Amostragem\tDATA\tHorario\tNome popular\tNome cientifico\tAvistado ou Canto(V/C)?\tTemperatura\tCoordenadas\tKm percorrido até o ponto\tKm desde o registro anterior';
     var lines = rows.map(function(r) {
-        return r.num + '\t' + r.date + '\t' + r.time + '\t' + r.commonName + '\t' + r.scientName + '\t' + r.vc + '\t' + r.temp + '\t' + r.coords;
+        return r.num + '\t' + r.date + '\t' + r.time + '\t' + r.commonName + '\t' + r.scientName + '\t' + r.vc + '\t' + r.temp + '\t' + r.coords + '\t' + r.kmAcumulado + '\t' + r.kmDesdeAnterior;
     });
     var text = header + '\n' + lines.join('\n');
     function fallback() {
@@ -13537,6 +13702,30 @@ function init() {
     document.getElementById('campo-export-pdf').addEventListener('click', function() { exportPDF(); });
     document.getElementById('campo-copy-table').addEventListener('click', copyTable);
     document.getElementById('campo-import-avist').addEventListener('click', importToAvist);
+
+    /* Painel "Iniciar Campo" — colapsar/expandir */
+    var trackToggle = document.getElementById('campo-track-id-toggle');
+    if (trackToggle) trackToggle.addEventListener('click', function() {
+        var body = document.getElementById('campo-track-id-body');
+        var chev = document.getElementById('campo-track-id-chevron');
+        if (!body) return;
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : '';
+        if (chev) chev.textContent = open ? '▲' : '▼';
+    });
+
+    /* Modal de finalização de campo */
+    var finishModal = document.getElementById('campo-track-finish-modal');
+    var finishClose = document.getElementById('campo-track-finish-close');
+    var finishSkip  = document.getElementById('campo-track-finish-skip');
+    var finishDl    = document.getElementById('campo-track-finish-download');
+    if (finishClose) finishClose.addEventListener('click', function() { finishModal.style.display = 'none'; });
+    if (finishSkip)  finishSkip.addEventListener('click', function() { finishModal.style.display = 'none'; });
+    if (finishDl)    finishDl.addEventListener('click', function() {
+        exportCampoTrackData();
+        finishModal.style.display = 'none';
+    });
+
     document.getElementById('campo-clear-list').addEventListener('click', function() {
         if (campoRecords.length === 0) { alert('A lista já está vazia.'); return; }
         if (confirm('Apagar todos os ' + campoRecords.length + ' registro(s)?')) {
@@ -13782,700 +13971,706 @@ if (document.readyState === 'loading') {
 
 
 
-// ==================== GRAVADOR DE CANTO (MODO CAMPO) — 100% OFFLINE ====================
-(function () {
-    'use strict';
-
-    /* ── Estado ─────────────────────────────────────────────────────────── */
-    var _mr       = null;   // MediaRecorder
-    var _chunks   = [];     // chunks de áudio
-    var _timerIv  = null;
-    var _analysisIv = null;
-    var _secs     = 0;
-    var _detected = {};
-    var _stream   = null;
-    var _actx     = null;   // AudioContext (visualizer)
-    var _analyser = null;
-    var _raf      = null;   // requestAnimationFrame id
-    var _busy     = false;  // análise em andamento
-    var _lastBlob = null;   // blob final para download
-    var _lastMime = '';
-    var _open     = true;   // estado do painel colapsável
-
-    /* ── DOM helper ─────────────────────────────────────────────────────── */
-    function $id(id) { return document.getElementById(id); }
-
-    /* ── Mime type compatível ───────────────────────────────────────────── */
-    function _bestMime() {
-        // Ordem de preferência: opus/webm (Chrome/Firefox/Android),
-        // mp4/aac (Safari iOS/macOS), ogg fallback
-        var list = [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/mp4;codecs=mp4a.40.2',
-            'audio/mp4',
-            'audio/ogg;codecs=opus',
-            'audio/ogg'
-        ];
-        if (!window.MediaRecorder) return '';
-        for (var i = 0; i < list.length; i++) {
-            try { if (MediaRecorder.isTypeSupported(list[i])) return list[i]; } catch(e) {}
-        }
-        return '';
-    }
-
-    /* ── Mensagem de status ─────────────────────────────────────────────── */
-    function _msg(txt, type) {
-        var el = $id('campo-canto-msg');
-        if (!el) return;
-        el.textContent = txt || '';
-        el.className   = 'campo-canto-msg' + (type ? ' ' + type : '');
-        el.style.display = txt ? 'block' : 'none';
-    }
-
-    function _setAnalyzing(on) {
-        var el = $id('campo-canto-analyzing');
-        if (el) el.style.display = on ? 'flex' : 'none';
-    }
-
-    function _setBadge(on) {
-        var el = $id('campo-canto-live-badge');
-        if (el) el.style.display = on ? 'inline-flex' : 'none';
-    }
-
-    function _setDlBtn(show, label) {
-        var el = $id('campo-canto-dl-btn');
-        if (!el) return;
-        el.style.display = show ? 'inline-flex' : 'none';
-        if (label) el.textContent = label;
-    }
-
-    function _escHtml(s) {
-        return String(s || '')
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    /* ── Toggle do painel colapsável ────────────────────────────────────── */
-    // Controla APENAS via variável + style.display direto — sem classes CSS
-    // para evitar conflito com qualquer regra existente no style.css.
-    function _togglePanel() {
-        _open = !_open;
-        var body    = $id('campo-canto-id-body');
-        var chevron = $id('campo-canto-id-chevron');
-        if (body)    body.style.display    = _open ? 'flex' : 'none';
-        if (chevron) chevron.textContent   = _open ? '▲' : '▼';
-    }
-
-    /* ── Verifica duplicata na lista ────────────────────────────────────── */
-    function _inList(sci) {
-        if (typeof campoRecords === 'undefined') return false;
-        return campoRecords.some(function(r) {
-            return r.scientName && r.scientName.toLowerCase() === sci.toLowerCase();
-        });
-    }
-
-    /* ══════════════════════════════════════════════════════════════════════
-       API PÚBLICA
-    ══════════════════════════════════════════════════════════════════════ */
-
-    /* ── Adicionar espécie à lista ──────────────────────────────────────── */
-    window.campCantoAddSpecies = function (btn, sci) {
-        var bird = null;
-        if (typeof BIRD_DATABASE !== 'undefined') {
-            for (var i = 0; i < BIRD_DATABASE.length; i++) {
-                if (BIRD_DATABASE[i].scientificName.toLowerCase() === sci.toLowerCase()) {
-                    bird = BIRD_DATABASE[i]; break;
-                }
-            }
-        }
-        if (!bird) bird = { commonName: sci, scientificName: sci };
-
-        if (typeof campoRecords === 'undefined') {
-            _msg('⚠️ Lista de campo não encontrada.', 'error'); return;
-        }
-        if (_inList(sci)) {
-            _msg('ℹ️ ' + (bird.commonName || sci) + ' já está na lista.', 'info');
-            setTimeout(function(){ _msg('',''); }, 2000);
-            return;
-        }
-
-        var now = new Date();
-        var pad = function(n){ return String(n).padStart(2,'0'); };
-        campoRecords.push({
-            id:         Date.now(),
-            date:       pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear(),
-            time:       pad(now.getHours())+':'+pad(now.getMinutes()),
-            commonName: bird.commonName  || sci,
-            scientName: bird.scientificName || sci,
-            vc:         'C',
-            temp:       (typeof campoCurrentTemp !== 'undefined') ? campoCurrentTemp : '--',
-            lat:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lat : null,
-            lng:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lng : null,
-            qty:        1
-        });
-
-        if (typeof renderCampoMarkers === 'function') renderCampoMarkers();
-        if (typeof updateCampoCounter === 'function') updateCampoCounter();
-
-        if (btn && btn.nodeType) {
-            btn.textContent = '✓';
-            btn.classList.add('added');
-            btn.disabled = true;
-            btn.title = 'Adicionada à lista';
-            var card = btn.closest ? btn.closest('.campo-canto-card') : null;
-            if (card) card.classList.add('already-added');
-        }
-        _msg('✅ ' + (bird.commonName || sci) + ' adicionada!', 'success');
-        setTimeout(function(){ _msg('',''); }, 2500);
-    };
-
-    /* ── Download do áudio gravado ──────────────────────────────────────── */
-    window.campCantoDownloadAudio = function () {
-        if (!_lastBlob || _lastBlob.size === 0) {
-            _msg('Nenhuma gravação disponível. Grave primeiro.', 'info'); return;
-        }
-        var dlBtn = $id('campo-canto-dl-btn');
-        if (dlBtn) { dlBtn.textContent = '⏳…'; dlBtn.disabled = true; }
-
-        _toWav(_lastBlob).then(function(wav) {
-            _triggerDownload(wav, _fileName('wav'), 'audio/wav');
-            _msg('✅ Download iniciado (.wav)', 'success');
-            setTimeout(function(){ _msg('',''); }, 3000);
-        }).catch(function() {
-            // fallback: baixa o formato original do browser
-            _triggerDownload(_lastBlob, _fileName('audio'), _lastMime);
-            _msg('⬇️ Download no formato original do navegador.', 'info');
-            setTimeout(function(){ _msg('',''); }, 3000);
-        }).finally(function() {
-            if (dlBtn) { dlBtn.textContent = '⬇️ Baixar áudio'; dlBtn.disabled = false; }
-        });
-    };
-
-    /* ── Toggle da seção de baixa confiança ─────────────────────────────── */
-    window.campCantoToggleLow = function () {
-        var list    = $id('campo-canto-low-list');
-        var chevron = $id('campo-canto-low-chevron');
-        if (!list) return;
-        var hidden = list.style.display === 'none' || list.style.display === '';
-        list.style.display = hidden ? 'flex' : 'none';
-        if (chevron) chevron.textContent = hidden ? '▲' : '▼';
-    };
-
-    /* ── Iniciar gravação ────────────────────────────────────────────────── */
-    window.campCantoStart = function () {
-        // iOS Safari exige que getUserMedia seja chamado DENTRO do handler de
-        // evento de toque — não pode ser adiado por Promise externa.
-        // Por isso usamos uma Promise imediata e tratamos o resultado.
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            _msg('❌ Gravação de áudio não suportada neste navegador.', 'error'); return;
-        }
-
-        // Resume AudioContext suspenso (política de autoplay do Chrome/Safari)
-        if (_actx && _actx.state === 'suspended') {
-            _actx.resume().catch(function(){});
-        }
-
-        var constraints = { audio: { echoCancellation: true, noiseSuppression: true }, video: false };
-
-        navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
-            _onStreamReady(stream);
-        }).catch(function(err) {
-            var msg = '❌ Microfone não autorizado.';
-            if (err && err.name === 'NotFoundError')     msg = '❌ Nenhum microfone encontrado.';
-            if (err && err.name === 'NotAllowedError')   msg = '❌ Permissão de microfone negada. Verifique as configurações do navegador.';
-            if (err && err.name === 'NotSupportedError') msg = '❌ Microfone não suportado neste dispositivo.';
-            _msg(msg, 'error');
-        });
-    };
-
-    function _onStreamReady(stream) {
-        _stream  = stream;
-        _chunks  = [];
-        _secs    = 0;
-        _detected = {};
-        _busy    = false;
-        _lastBlob = null;
-        _setDlBtn(false);
-
-        // Limpa resultados anteriores
-        ['campo-canto-high-list','campo-canto-mid-list','campo-canto-low-list'].forEach(function(id){
-            var el = $id(id); if (el) el.innerHTML = '';
-        });
-        ['campo-canto-high-section','campo-canto-mid-section','campo-canto-low-section','campo-canto-results'].forEach(function(id){
-            var el = $id(id); if (el) el.style.display = 'none';
-        });
-
-        // Troca botões
-        var startBtn = $id('campo-canto-start-btn');
-        var stopBtn  = $id('campo-canto-stop-btn');
-        if (startBtn) startBtn.style.display = 'none';
-        if (stopBtn)  stopBtn.style.display  = 'inline-flex';
-        _setBadge(true);
-        _msg('','');
-
-        // Timer
-        var timerEl = $id('campo-canto-timer');
-        if (timerEl) { timerEl.textContent = '0:00'; timerEl.classList.add('rec'); }
-        if (_timerIv) clearInterval(_timerIv);
-        _timerIv = setInterval(function(){
-            _secs++;
-            var m = Math.floor(_secs/60), s = _secs % 60;
-            if (timerEl) timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-        }, 1000);
-
-        // Visualizador
-        _startVisualizer(stream);
-
-        // MediaRecorder — tenta com mime, fallback sem opções
-        var mime = _bestMime();
-        _lastMime = mime || 'audio/webm';
-        try {
-            _mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-        } catch(e) {
-            try { _mr = new MediaRecorder(stream); } catch(e2) {
-                _msg('❌ MediaRecorder não suportado neste navegador.', 'error');
-                stream.getTracks().forEach(function(t){ t.stop(); });
-                return;
-            }
-        }
-
-        _mr.ondataavailable = function(e) {
-            if (e.data && e.data.size > 0) _chunks.push(e.data);
-        };
-
-        // timeslice de 500ms para acumular chunks em tempo real
-        _mr.start(500);
-
-        // Análise periódica a cada 6s (mínimo 4s gravados)
-        if (_analysisIv) clearInterval(_analysisIv);
-        _analysisIv = setInterval(function(){
-            if (_secs >= 4) _analyze();
-        }, 6000);
-    }
-
-    /* ── Parar gravação ─────────────────────────────────────────────────── */
-    window.campCantoStop = function () {
-        if (_timerIv)    { clearInterval(_timerIv);    _timerIv = null; }
-        if (_analysisIv) { clearInterval(_analysisIv); _analysisIv = null; }
-
-        var timerEl = $id('campo-canto-timer');
-        if (timerEl) timerEl.classList.remove('rec');
-
-        var startBtn = $id('campo-canto-start-btn');
-        var stopBtn  = $id('campo-canto-stop-btn');
-        if (startBtn) startBtn.style.display = 'inline-flex';
-        if (stopBtn)  stopBtn.style.display  = 'none';
-        _setBadge(false);
-        _setAnalyzing(false);
-
-        _stopVisualizer();
-
-        if (_mr && _mr.state !== 'inactive') {
-            _mr.addEventListener('stop', function() {
-                _mr = null;
-                if (_chunks.length > 0) {
-                    _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
-                    _setDlBtn(true, '⬇️ Baixar áudio');
-                    _analyze();
-                } else {
-                    _msg('ℹ️ Nenhum áudio capturado. Tente novamente.', 'info');
-                }
-            }, { once: true });
-            _mr.stop();
-        } else {
-            _mr = null;
-            if (_chunks.length > 0) {
-                _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
-                _setDlBtn(true, '⬇️ Baixar áudio');
-                _analyze();
-            } else {
-                _msg('ℹ️ Nenhum áudio capturado.', 'info');
-            }
-        }
-
-        if (_stream) {
-            _stream.getTracks().forEach(function(t){ t.stop(); });
-            _stream = null;
-        }
-    };
-
-    /* ══════════════════════════════════════════════════════════════════════
-       VISUALIZADOR DE WAVEFORM
-    ══════════════════════════════════════════════════════════════════════ */
-    function _startVisualizer(stream) {
-        var canvas = $id('campo-canto-canvas');
-        if (!canvas) return;
-        try {
-            _actx     = new (window.AudioContext || window.webkitAudioContext)();
-            _analyser = _actx.createAnalyser();
-            _analyser.fftSize = 256;
-            var src = _actx.createMediaStreamSource(stream);
-            src.connect(_analyser);
-        } catch(e) { return; }
-
-        var ctx    = canvas.getContext('2d');
-        var bufLen = _analyser.frequencyBinCount;
-        var data   = new Uint8Array(bufLen);
-
-        function draw() {
-            _raf = requestAnimationFrame(draw);
-            _analyser.getByteFrequencyData(data);
-            var W = canvas.offsetWidth || canvas.width || 300;
-            var H = canvas.offsetHeight || canvas.height || 44;
-            if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
-            ctx.fillStyle = 'rgba(8,20,10,0.4)';
-            ctx.fillRect(0, 0, W, H);
-            var barW = W / bufLen;
-            for (var i = 0; i < bufLen; i++) {
-                var v = data[i] / 255;
-                ctx.fillStyle = 'rgb(0,' + Math.round(80 + v*175) + ',50)';
-                ctx.fillRect(i * barW, H - v * H, barW - 1, v * H);
-            }
-        }
-        draw();
-    }
-
-    function _stopVisualizer() {
-        if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
-        if (_actx) { try { _actx.close(); } catch(e){} _actx = null; _analyser = null; }
-        _drawIdle();
-    }
-
-    function _drawIdle() {
-        var canvas = $id('campo-canto-canvas');
-        if (!canvas) return;
-        var W = canvas.offsetWidth || canvas.width || 300;
-        var H = canvas.offsetHeight || canvas.height || 44;
-        canvas.width = W; canvas.height = H;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#081510';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#1a3d22';
-        for (var i = 0; i < 60; i++) {
-            var bh = Math.random() * H * 0.3 + 2;
-            ctx.fillRect(i * (W/60), H - bh, W/60 - 1, bh);
-        }
-    }
-
-    /* ══════════════════════════════════════════════════════════════════════
-       MOTOR DE ANÁLISE ESPECTRAL OFFLINE
-    ══════════════════════════════════════════════════════════════════════ */
-
-    var _PROFILES = {
-        'Passeriformes':   { lo:0.15, mi:0.60, hi:0.25, ce:0.55, mo:0.75, ha:0.70 },
-        'Psittaciformes':  { lo:0.20, mi:0.50, hi:0.30, ce:0.52, mo:0.55, ha:0.50 },
-        'Columbiformes':   { lo:0.55, mi:0.35, hi:0.10, ce:0.28, mo:0.20, ha:0.80 },
-        'Strigiformes':    { lo:0.50, mi:0.40, hi:0.10, ce:0.32, mo:0.30, ha:0.75 },
-        'Apodiformes':     { lo:0.05, mi:0.40, hi:0.55, ce:0.72, mo:0.60, ha:0.55 },
-        'Piciformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.42, mo:0.45, ha:0.45 },
-        'Accipitriformes': { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
-        'Falconiformes':   { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
-        'Galliformes':     { lo:0.60, mi:0.30, hi:0.10, ce:0.25, mo:0.25, ha:0.50 },
-        'Gruiformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.40, mo:0.50, ha:0.60 },
-        'Charadriiformes': { lo:0.10, mi:0.45, hi:0.45, ce:0.65, mo:0.55, ha:0.50 },
-        'Pelecaniformes':  { lo:0.55, mi:0.35, hi:0.10, ce:0.30, mo:0.20, ha:0.55 },
-        'Suliformes':      { lo:0.50, mi:0.38, hi:0.12, ce:0.32, mo:0.22, ha:0.52 },
-        'Tinamiformes':    { lo:0.25, mi:0.65, hi:0.10, ce:0.45, mo:0.15, ha:0.90 },
-        'Cuculiformes':    { lo:0.30, mi:0.58, hi:0.12, ce:0.42, mo:0.35, ha:0.70 },
-        'Caprimulgiformes':{ lo:0.30, mi:0.55, hi:0.15, ce:0.43, mo:0.40, ha:0.65 },
-        'Trogoniformes':   { lo:0.40, mi:0.50, hi:0.10, ce:0.38, mo:0.25, ha:0.72 },
-        'Coraciiformes':   { lo:0.15, mi:0.50, hi:0.35, ce:0.58, mo:0.45, ha:0.55 },
-        'Anseriformes':    { lo:0.45, mi:0.42, hi:0.13, ce:0.35, mo:0.35, ha:0.48 }
-    };
-
-    function _profileDist(a, b) {
-        var k=['lo','mi','hi','ce','mo','ha'], s=0, d;
-        for (var i=0;i<k.length;i++){ d=(a[k[i]]||0)-(b[k[i]]||0); s+=d*d; }
-        return Math.sqrt(s);
-    }
-
-    function _extractProfile(blob) {
-        return new Promise(function(resolve, reject) {
-            var fr = new FileReader();
-            fr.onerror = reject;
-            fr.onload = function() {
-                var ab = fr.result;
-                var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtxClass) { reject(new Error('no AudioContext')); return; }
-                var ctx;
-                try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
-                ctx.decodeAudioData(ab, function(buf) {
-                    try {
-                        ctx.close();
-                        var ch   = buf.getChannelData(0);
-                        var sr   = buf.sampleRate;
-                        var N    = ch.length;
-                        var fftN = 2048;
-                        var hop  = 512;
-                        var nF   = Math.floor((N - fftN) / hop);
-                        if (nF < 1) { reject(new Error('short')); return; }
-
-                        var hann = new Float32Array(fftN);
-                        for (var i=0;i<fftN;i++) hann[i]=0.5*(1-Math.cos(2*Math.PI*i/(fftN-1)));
-
-                        var bins  = fftN/2;
-                        var acc   = new Float64Array(bins);
-                        var step  = Math.max(1, Math.floor(nF/50));
-                        var cnt   = 0;
-                        var fEnrg = [];
-
-                        for (var f=0;f<nF;f+=step) {
-                            var st = f*hop;
-                            var fr2 = new Float32Array(fftN);
-                            var fe  = 0;
-                            for (var j=0;j<fftN&&(st+j)<N;j++){
-                                fr2[j]=ch[st+j]*hann[j];
-                                fe += ch[st+j]*ch[st+j];
-                            }
-                            fEnrg.push(fe/fftN);
-                            // DFT strided
-                            for (var k=0;k<bins;k++){
-                                var re=0,im=0,s2=2*Math.PI*k/fftN;
-                                for (var n=0;n<fftN;n+=4){ re+=fr2[n]*Math.cos(s2*n); im-=fr2[n]*Math.sin(s2*n); }
-                                acc[k]+=(re*re+im*im);
-                            }
-                            cnt++;
-                        }
-                        if (cnt===0){ reject(new Error('cnt=0')); return; }
-                        for (var b=0;b<bins;b++) acc[b]/=cnt;
-
-                        var bHz  = sr/fftN;
-                        var b2k  = Math.round(2000/bHz);
-                        var b6k  = Math.round(6000/bHz);
-                        var lo=0,mi=0,hi=0,tot=0,cN=0,cD=0,pv=0,pb=0;
-                        for (var b2=1;b2<bins;b2++){
-                            var e=acc[b2]; tot+=e;
-                            cN+=b2*bHz*e; cD+=e;
-                            if(b2<b2k)lo+=e; else if(b2<b6k)mi+=e; else hi+=e;
-                            if(e>pv){pv=e;pb=b2;}
-                        }
-                        if (tot<1e-10){ reject(new Error('silence')); return; }
-                        var ce=Math.min(1,(cD>0?cN/cD:1000)/10000);
-                        var mFE=fEnrg.reduce(function(a,b){return a+b;},0)/fEnrg.length;
-                        var vFE=0; fEnrg.forEach(function(x){vFE+=(x-mFE)*(x-mFE);}); vFE/=fEnrg.length;
-                        resolve({
-                            lo:lo/tot, mi:mi/tot, hi:hi/tot, ce:ce,
-                            mo:Math.min(1,Math.sqrt(vFE)/(mFE+1e-10)),
-                            ha:Math.min(1,pv/((tot/bins)*10+1e-10)),
-                            tot:tot, pkHz:pb*bHz
-                        });
-                    } catch(ex){ reject(ex); }
-                }, function(err){ try{ctx.close();}catch(e){} reject(err||new Error('decode')); });
-            };
-            fr.readAsArrayBuffer(blob);
-        });
-    }
-
-    function _matchOrders(p) {
-        var list = [];
-        for (var order in _PROFILES) {
-            var dist = _profileDist(p, _PROFILES[order]);
-            list.push({ order: order, score: Math.max(0, 1 - dist/1.5) });
-        }
-        list.sort(function(a,b){ return b.score-a.score; });
-        return list.slice(0,4);
-    }
-
-    function _selectCandidates(orders) {
-        if (typeof BIRD_DATABASE === 'undefined') return [];
-        var out = [], seen = {};
-        for (var oi=0;oi<orders.length;oi++){
-            var order = orders[oi].order, score = orders[oi].score;
-            var pool = [];
-            for (var bi=0;bi<BIRD_DATABASE.length;bi++){
-                if (BIRD_DATABASE[bi].ordem === order) pool.push(BIRD_DATABASE[bi]);
-            }
-            pool.sort(function(){ return Math.random()-0.5; });
-            var take = pool.slice(0,6);
-            for (var ti=0;ti<take.length;ti++){
-                var bird = take[ti];
-                if (seen[bird.scientificName]) continue;
-                seen[bird.scientificName] = true;
-                var noise = (Math.random()-0.5)*0.15;
-                var conf  = Math.round(Math.min(95,Math.max(20,(score+noise)*100)));
-                out.push({
-                    sci:  bird.scientificName,
-                    com:  bird.commonName,
-                    conf: conf,
-                    iucn: (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].iucn||'LC' : 'LC',
-                    sc:   (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].sc||'NE'  : 'NE'
-                });
-            }
-        }
-        out.sort(function(a,b){ return b.conf-a.conf; });
-        return out.slice(0,5);
-    }
-
-    function _analyze() {
-        if (_chunks.length === 0 || _busy) return;
-        _busy = true;
-        _setAnalyzing(true);
-
-        var mime = _lastMime || 'audio/webm';
-        var blob = new Blob(_chunks.slice(), { type: mime });
-
-        _extractProfile(blob).then(function(p) {
-            if (!p || p.tot < 1e-8) {
-                _msg('🔇 Áudio muito fraco. Aproxime do microfone.', 'warn');
-                _busy = false; _setAnalyzing(false); return;
-            }
-            var orders = _matchOrders(p);
-            var cands  = _selectCandidates(orders);
-            if (cands.length > 0) { _renderResults(cands); _msg('',''); }
-            else _msg('Não identificado. Tente gravar mais tempo.', 'info');
-            _busy = false; _setAnalyzing(false);
-        }).catch(function(e) {
-            console.warn('[CampoCanto]', e);
-            _msg('⚠️ Erro ao processar áudio.', 'error');
-            _busy = false; _setAnalyzing(false);
-        });
-    }
-
-    function _renderResults(birds) {
-        var cont = $id('campo-canto-results');
-        if (cont) cont.style.display = 'block';
-
-        for (var i=0;i<birds.length;i++) {
-            var b = birds[i];
-            if (_detected[b.sci]) continue;
-            _detected[b.sci] = true;
-
-            var tier = b.conf >= 80 ? 'high' : b.conf >= 50 ? 'mid' : 'low';
-            var color = tier==='high' ? '#2ea050' : tier==='mid' ? '#c97a20' : '#888';
-            var already = _inList(b.sci);
-
-            var list = $id('campo-canto-' + tier + '-list');
-            var sec  = $id('campo-canto-' + tier + '-section');
-            if (!list) continue;
-            if (sec)  sec.style.display = 'block';
-
-            var badge = '';
-            if (b.sc   && b.sc   !== 'LC' && b.sc   !== 'NE') badge += '<span class="campo-canto-status-badge sc">'  + _escHtml(b.sc)   + '</span>';
-            if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') badge += '<span class="campo-canto-status-badge iucn">IUCN ' + _escHtml(b.iucn) + '</span>';
-
-            var card = document.createElement('div');
-            card.className  = 'campo-canto-card campo-canto-card-' + tier + (already ? ' already-added' : '');
-            card.dataset.sci = b.sci;
-            card.innerHTML  =
-                '<div class="campo-canto-card-info">' +
-                  '<span class="campo-canto-card-common">' + _escHtml(b.com||b.sci) + '</span>' +
-                  '<span class="campo-canto-card-sci">'    + _escHtml(b.sci)         + '</span>' +
-                  '<div class="campo-canto-card-conf">' +
-                    '<div class="campo-canto-conf-bar-bg">' +
-                      '<div class="campo-canto-conf-bar" style="width:' + b.conf + '%;background:' + color + ';"></div>' +
-                    '</div>' +
-                    '<span class="campo-canto-conf-pct" style="color:' + color + '">' + b.conf + '%</span>' +
-                  '</div>' +
-                  '<div class="campo-canto-card-tags">' + badge + '</div>' +
-                '</div>' +
-                '<button class="campo-canto-add-btn' + (already ? ' added' : '') + '"' +
-                  ' data-sci="' + _escHtml(b.sci) + '"' +
-                  ' title="' + (already ? 'Já adicionada' : 'Adicionar à lista') + '"' +
-                  (already ? ' disabled' : '') + '>' +
-                  (already ? '✓' : '➕') +
-                '</button>';
-
-            // Usa addEventListener em vez de onclick inline — compatível com CSP e todos os browsers
-            var addBtn = card.querySelector('.campo-canto-add-btn');
-            if (addBtn && !already) {
-                (function(btn, sci){ btn.addEventListener('click', function(){ window.campCantoAddSpecies(btn, sci); }); })(addBtn, b.sci);
-            }
-            list.appendChild(card);
-        }
-    }
-
-    /* ── Converte blob → WAV PCM 16-bit ─────────────────────────────────── */
-    function _toWav(blob) {
-        return new Promise(function(resolve, reject) {
-            var fr = new FileReader();
-            fr.onerror = reject;
-            fr.onload = function() {
-                var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtxClass) { reject(new Error('no ctx')); return; }
-                var ctx;
-                try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
-                ctx.decodeAudioData(fr.result, function(buf) {
-                    try {
-                        ctx.close();
-                        var nCh  = buf.numberOfChannels;
-                        var sr   = buf.sampleRate;
-                        var nSmp = buf.length;
-                        var bps  = 2;
-                        var dSz  = nSmp * nCh * bps;
-                        var ab   = new ArrayBuffer(44 + dSz);
-                        var v    = new DataView(ab);
-                        var ws = function(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
-                        ws(0,'RIFF'); v.setUint32(4,36+dSz,true); ws(8,'WAVE');
-                        ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
-                        v.setUint16(22,nCh,true); v.setUint32(24,sr,true);
-                        v.setUint32(28,sr*nCh*bps,true); v.setUint16(32,nCh*bps,true);
-                        v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,dSz,true);
-                        var off = 44;
-                        for (var i=0;i<nSmp;i++) for (var c=0;c<nCh;c++){
-                            var s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));
-                            v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2;
-                        }
-                        resolve(new Blob([ab],{type:'audio/wav'}));
-                    } catch(ex){ reject(ex); }
-                }, reject);
-            };
-            fr.readAsArrayBuffer(blob);
-        });
-    }
-
-    function _triggerDownload(blob, name, type) {
-        var url = URL.createObjectURL(blob);
-        var a   = document.createElement('a');
-        a.href = url; a.download = name; a.style.display = 'none';
-        document.body.appendChild(a); a.click();
-        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 3000);
-    }
-
-    function _fileName(ext) {
-        var d=new Date(), p=function(n){return String(n).padStart(2,'0');};
-        return 'canto_' + d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+'.'+ext;
-    }
-
-    /* ── Inicialização ──────────────────────────────────────────────────── */
-    function _init() {
-        var header  = $id('campo-canto-id-toggle');
-        var body    = $id('campo-canto-id-body');
-        var chevron = $id('campo-canto-id-chevron');
-
-        if (header && body) {
-            // Força abertura inicial via style (sobrepõe qualquer CSS)
-            _open = true;
-            body.style.display    = 'flex';
-            body.style.flexDirection = 'column';
-            if (chevron) chevron.textContent = '▲';
-
-            header.addEventListener('click', function() {
-                _open = !_open;
-                body.style.display = _open ? 'flex' : 'none';
-                if (chevron) chevron.textContent = _open ? '▲' : '▼';
-            });
-            // Touch events explícitos para iOS
-            header.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                _open = !_open;
-                body.style.display = _open ? 'flex' : 'none';
-                if (chevron) chevron.textContent = _open ? '▲' : '▼';
-            });
-        }
-
-        // Canvas idle
-        setTimeout(function(){ _drawIdle(); }, 100);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _init);
-    } else {
-        _init();
-    }
-
-})();
-// ==================== FIM GRAVADOR DE CANTO ====================
+// ==================== GRAVADOR DE CANTO (MODO CAMPO) — DESATIVADO ====================
+// O bloco abaixo foi inteiramente comentado pois a funcionalidade de gravação e
+// identificação automática de canto por áudio não estava funcionando corretamente.
+// O código foi mantido (não removido) para referência/futura manutenção.
+// Substituído em campo pelo botão "Iniciar Campo" (rastreamento de rota em tempo real).
+// // ==================== GRAVADOR DE CANTO (MODO CAMPO) — 100% OFFLINE ====================
+// (function () {
+//     'use strict';
+// 
+//     /* ── Estado ─────────────────────────────────────────────────────────── */
+//     var _mr       = null;   // MediaRecorder
+//     var _chunks   = [];     // chunks de áudio
+//     var _timerIv  = null;
+//     var _analysisIv = null;
+//     var _secs     = 0;
+//     var _detected = {};
+//     var _stream   = null;
+//     var _actx     = null;   // AudioContext (visualizer)
+//     var _analyser = null;
+//     var _raf      = null;   // requestAnimationFrame id
+//     var _busy     = false;  // análise em andamento
+//     var _lastBlob = null;   // blob final para download
+//     var _lastMime = '';
+//     var _open     = true;   // estado do painel colapsável
+// 
+//     /* ── DOM helper ─────────────────────────────────────────────────────── */
+//     function $id(id) { return document.getElementById(id); }
+// 
+//     /* ── Mime type compatível ───────────────────────────────────────────── */
+//     function _bestMime() {
+//         // Ordem de preferência: opus/webm (Chrome/Firefox/Android),
+//         // mp4/aac (Safari iOS/macOS), ogg fallback
+//         var list = [
+//             'audio/webm;codecs=opus',
+//             'audio/webm',
+//             'audio/mp4;codecs=mp4a.40.2',
+//             'audio/mp4',
+//             'audio/ogg;codecs=opus',
+//             'audio/ogg'
+//         ];
+//         if (!window.MediaRecorder) return '';
+//         for (var i = 0; i < list.length; i++) {
+//             try { if (MediaRecorder.isTypeSupported(list[i])) return list[i]; } catch(e) {}
+//         }
+//         return '';
+//     }
+// 
+//     /* ── Mensagem de status ─────────────────────────────────────────────── */
+//     function _msg(txt, type) {
+//         var el = $id('campo-canto-msg');
+//         if (!el) return;
+//         el.textContent = txt || '';
+//         el.className   = 'campo-canto-msg' + (type ? ' ' + type : '');
+//         el.style.display = txt ? 'block' : 'none';
+//     }
+// 
+//     function _setAnalyzing(on) {
+//         var el = $id('campo-canto-analyzing');
+//         if (el) el.style.display = on ? 'flex' : 'none';
+//     }
+// 
+//     function _setBadge(on) {
+//         var el = $id('campo-canto-live-badge');
+//         if (el) el.style.display = on ? 'inline-flex' : 'none';
+//     }
+// 
+//     function _setDlBtn(show, label) {
+//         var el = $id('campo-canto-dl-btn');
+//         if (!el) return;
+//         el.style.display = show ? 'inline-flex' : 'none';
+//         if (label) el.textContent = label;
+//     }
+// 
+//     function _escHtml(s) {
+//         return String(s || '')
+//             .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+//             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+//     }
+// 
+//     /* ── Toggle do painel colapsável ────────────────────────────────────── */
+//     // Controla APENAS via variável + style.display direto — sem classes CSS
+//     // para evitar conflito com qualquer regra existente no style.css.
+//     function _togglePanel() {
+//         _open = !_open;
+//         var body    = $id('campo-canto-id-body');
+//         var chevron = $id('campo-canto-id-chevron');
+//         if (body)    body.style.display    = _open ? 'flex' : 'none';
+//         if (chevron) chevron.textContent   = _open ? '▲' : '▼';
+//     }
+// 
+//     /* ── Verifica duplicata na lista ────────────────────────────────────── */
+//     function _inList(sci) {
+//         if (typeof campoRecords === 'undefined') return false;
+//         return campoRecords.some(function(r) {
+//             return r.scientName && r.scientName.toLowerCase() === sci.toLowerCase();
+//         });
+//     }
+// 
+//     /* ══════════════════════════════════════════════════════════════════════
+//        API PÚBLICA
+//     ══════════════════════════════════════════════════════════════════════ */
+// 
+//     /* ── Adicionar espécie à lista ──────────────────────────────────────── */
+//     window.campCantoAddSpecies = function (btn, sci) {
+//         var bird = null;
+//         if (typeof BIRD_DATABASE !== 'undefined') {
+//             for (var i = 0; i < BIRD_DATABASE.length; i++) {
+//                 if (BIRD_DATABASE[i].scientificName.toLowerCase() === sci.toLowerCase()) {
+//                     bird = BIRD_DATABASE[i]; break;
+//                 }
+//             }
+//         }
+//         if (!bird) bird = { commonName: sci, scientificName: sci };
+// 
+//         if (typeof campoRecords === 'undefined') {
+//             _msg('⚠️ Lista de campo não encontrada.', 'error'); return;
+//         }
+//         if (_inList(sci)) {
+//             _msg('ℹ️ ' + (bird.commonName || sci) + ' já está na lista.', 'info');
+//             setTimeout(function(){ _msg('',''); }, 2000);
+//             return;
+//         }
+// 
+//         var now = new Date();
+//         var pad = function(n){ return String(n).padStart(2,'0'); };
+//         campoRecords.push({
+//             id:         Date.now(),
+//             date:       pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear(),
+//             time:       pad(now.getHours())+':'+pad(now.getMinutes()),
+//             commonName: bird.commonName  || sci,
+//             scientName: bird.scientificName || sci,
+//             vc:         'C',
+//             temp:       (typeof campoCurrentTemp !== 'undefined') ? campoCurrentTemp : '--',
+//             lat:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lat : null,
+//             lng:        (typeof campoCurrentGPS  !== 'undefined' && campoCurrentGPS) ? campoCurrentGPS.lng : null,
+//             qty:        1
+//         });
+// 
+//         if (typeof renderCampoMarkers === 'function') renderCampoMarkers();
+//         if (typeof updateCampoCounter === 'function') updateCampoCounter();
+// 
+//         if (btn && btn.nodeType) {
+//             btn.textContent = '✓';
+//             btn.classList.add('added');
+//             btn.disabled = true;
+//             btn.title = 'Adicionada à lista';
+//             var card = btn.closest ? btn.closest('.campo-canto-card') : null;
+//             if (card) card.classList.add('already-added');
+//         }
+//         _msg('✅ ' + (bird.commonName || sci) + ' adicionada!', 'success');
+//         setTimeout(function(){ _msg('',''); }, 2500);
+//     };
+// 
+//     /* ── Download do áudio gravado ──────────────────────────────────────── */
+//     window.campCantoDownloadAudio = function () {
+//         if (!_lastBlob || _lastBlob.size === 0) {
+//             _msg('Nenhuma gravação disponível. Grave primeiro.', 'info'); return;
+//         }
+//         var dlBtn = $id('campo-canto-dl-btn');
+//         if (dlBtn) { dlBtn.textContent = '⏳…'; dlBtn.disabled = true; }
+// 
+//         _toWav(_lastBlob).then(function(wav) {
+//             _triggerDownload(wav, _fileName('wav'), 'audio/wav');
+//             _msg('✅ Download iniciado (.wav)', 'success');
+//             setTimeout(function(){ _msg('',''); }, 3000);
+//         }).catch(function() {
+//             // fallback: baixa o formato original do browser
+//             _triggerDownload(_lastBlob, _fileName('audio'), _lastMime);
+//             _msg('⬇️ Download no formato original do navegador.', 'info');
+//             setTimeout(function(){ _msg('',''); }, 3000);
+//         }).finally(function() {
+//             if (dlBtn) { dlBtn.textContent = '⬇️ Baixar áudio'; dlBtn.disabled = false; }
+//         });
+//     };
+// 
+//     /* ── Toggle da seção de baixa confiança ─────────────────────────────── */
+//     window.campCantoToggleLow = function () {
+//         var list    = $id('campo-canto-low-list');
+//         var chevron = $id('campo-canto-low-chevron');
+//         if (!list) return;
+//         var hidden = list.style.display === 'none' || list.style.display === '';
+//         list.style.display = hidden ? 'flex' : 'none';
+//         if (chevron) chevron.textContent = hidden ? '▲' : '▼';
+//     };
+// 
+//     /* ── Iniciar gravação ────────────────────────────────────────────────── */
+//     window.campCantoStart = function () {
+//         // iOS Safari exige que getUserMedia seja chamado DENTRO do handler de
+//         // evento de toque — não pode ser adiado por Promise externa.
+//         // Por isso usamos uma Promise imediata e tratamos o resultado.
+//         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+//             _msg('❌ Gravação de áudio não suportada neste navegador.', 'error'); return;
+//         }
+// 
+//         // Resume AudioContext suspenso (política de autoplay do Chrome/Safari)
+//         if (_actx && _actx.state === 'suspended') {
+//             _actx.resume().catch(function(){});
+//         }
+// 
+//         var constraints = { audio: { echoCancellation: true, noiseSuppression: true }, video: false };
+// 
+//         navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+//             _onStreamReady(stream);
+//         }).catch(function(err) {
+//             var msg = '❌ Microfone não autorizado.';
+//             if (err && err.name === 'NotFoundError')     msg = '❌ Nenhum microfone encontrado.';
+//             if (err && err.name === 'NotAllowedError')   msg = '❌ Permissão de microfone negada. Verifique as configurações do navegador.';
+//             if (err && err.name === 'NotSupportedError') msg = '❌ Microfone não suportado neste dispositivo.';
+//             _msg(msg, 'error');
+//         });
+//     };
+// 
+//     function _onStreamReady(stream) {
+//         _stream  = stream;
+//         _chunks  = [];
+//         _secs    = 0;
+//         _detected = {};
+//         _busy    = false;
+//         _lastBlob = null;
+//         _setDlBtn(false);
+// 
+//         // Limpa resultados anteriores
+//         ['campo-canto-high-list','campo-canto-mid-list','campo-canto-low-list'].forEach(function(id){
+//             var el = $id(id); if (el) el.innerHTML = '';
+//         });
+//         ['campo-canto-high-section','campo-canto-mid-section','campo-canto-low-section','campo-canto-results'].forEach(function(id){
+//             var el = $id(id); if (el) el.style.display = 'none';
+//         });
+// 
+//         // Troca botões
+//         var startBtn = $id('campo-canto-start-btn');
+//         var stopBtn  = $id('campo-canto-stop-btn');
+//         if (startBtn) startBtn.style.display = 'none';
+//         if (stopBtn)  stopBtn.style.display  = 'inline-flex';
+//         _setBadge(true);
+//         _msg('','');
+// 
+//         // Timer
+//         var timerEl = $id('campo-canto-timer');
+//         if (timerEl) { timerEl.textContent = '0:00'; timerEl.classList.add('rec'); }
+//         if (_timerIv) clearInterval(_timerIv);
+//         _timerIv = setInterval(function(){
+//             _secs++;
+//             var m = Math.floor(_secs/60), s = _secs % 60;
+//             if (timerEl) timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+//         }, 1000);
+// 
+//         // Visualizador
+//         _startVisualizer(stream);
+// 
+//         // MediaRecorder — tenta com mime, fallback sem opções
+//         var mime = _bestMime();
+//         _lastMime = mime || 'audio/webm';
+//         try {
+//             _mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+//         } catch(e) {
+//             try { _mr = new MediaRecorder(stream); } catch(e2) {
+//                 _msg('❌ MediaRecorder não suportado neste navegador.', 'error');
+//                 stream.getTracks().forEach(function(t){ t.stop(); });
+//                 return;
+//             }
+//         }
+// 
+//         _mr.ondataavailable = function(e) {
+//             if (e.data && e.data.size > 0) _chunks.push(e.data);
+//         };
+// 
+//         // timeslice de 500ms para acumular chunks em tempo real
+//         _mr.start(500);
+// 
+//         // Análise periódica a cada 6s (mínimo 4s gravados)
+//         if (_analysisIv) clearInterval(_analysisIv);
+//         _analysisIv = setInterval(function(){
+//             if (_secs >= 4) _analyze();
+//         }, 6000);
+//     }
+// 
+//     /* ── Parar gravação ─────────────────────────────────────────────────── */
+//     window.campCantoStop = function () {
+//         if (_timerIv)    { clearInterval(_timerIv);    _timerIv = null; }
+//         if (_analysisIv) { clearInterval(_analysisIv); _analysisIv = null; }
+// 
+//         var timerEl = $id('campo-canto-timer');
+//         if (timerEl) timerEl.classList.remove('rec');
+// 
+//         var startBtn = $id('campo-canto-start-btn');
+//         var stopBtn  = $id('campo-canto-stop-btn');
+//         if (startBtn) startBtn.style.display = 'inline-flex';
+//         if (stopBtn)  stopBtn.style.display  = 'none';
+//         _setBadge(false);
+//         _setAnalyzing(false);
+// 
+//         _stopVisualizer();
+// 
+//         if (_mr && _mr.state !== 'inactive') {
+//             _mr.addEventListener('stop', function() {
+//                 _mr = null;
+//                 if (_chunks.length > 0) {
+//                     _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
+//                     _setDlBtn(true, '⬇️ Baixar áudio');
+//                     _analyze();
+//                 } else {
+//                     _msg('ℹ️ Nenhum áudio capturado. Tente novamente.', 'info');
+//                 }
+//             }, { once: true });
+//             _mr.stop();
+//         } else {
+//             _mr = null;
+//             if (_chunks.length > 0) {
+//                 _lastBlob = new Blob(_chunks, { type: _lastMime || 'audio/webm' });
+//                 _setDlBtn(true, '⬇️ Baixar áudio');
+//                 _analyze();
+//             } else {
+//                 _msg('ℹ️ Nenhum áudio capturado.', 'info');
+//             }
+//         }
+// 
+//         if (_stream) {
+//             _stream.getTracks().forEach(function(t){ t.stop(); });
+//             _stream = null;
+//         }
+//     };
+// 
+//     /* ══════════════════════════════════════════════════════════════════════
+//        VISUALIZADOR DE WAVEFORM
+//     ══════════════════════════════════════════════════════════════════════ */
+//     function _startVisualizer(stream) {
+//         var canvas = $id('campo-canto-canvas');
+//         if (!canvas) return;
+//         try {
+//             _actx     = new (window.AudioContext || window.webkitAudioContext)();
+//             _analyser = _actx.createAnalyser();
+//             _analyser.fftSize = 256;
+//             var src = _actx.createMediaStreamSource(stream);
+//             src.connect(_analyser);
+//         } catch(e) { return; }
+// 
+//         var ctx    = canvas.getContext('2d');
+//         var bufLen = _analyser.frequencyBinCount;
+//         var data   = new Uint8Array(bufLen);
+// 
+//         function draw() {
+//             _raf = requestAnimationFrame(draw);
+//             _analyser.getByteFrequencyData(data);
+//             var W = canvas.offsetWidth || canvas.width || 300;
+//             var H = canvas.offsetHeight || canvas.height || 44;
+//             if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+//             ctx.fillStyle = 'rgba(8,20,10,0.4)';
+//             ctx.fillRect(0, 0, W, H);
+//             var barW = W / bufLen;
+//             for (var i = 0; i < bufLen; i++) {
+//                 var v = data[i] / 255;
+//                 ctx.fillStyle = 'rgb(0,' + Math.round(80 + v*175) + ',50)';
+//                 ctx.fillRect(i * barW, H - v * H, barW - 1, v * H);
+//             }
+//         }
+//         draw();
+//     }
+// 
+//     function _stopVisualizer() {
+//         if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+//         if (_actx) { try { _actx.close(); } catch(e){} _actx = null; _analyser = null; }
+//         _drawIdle();
+//     }
+// 
+//     function _drawIdle() {
+//         var canvas = $id('campo-canto-canvas');
+//         if (!canvas) return;
+//         var W = canvas.offsetWidth || canvas.width || 300;
+//         var H = canvas.offsetHeight || canvas.height || 44;
+//         canvas.width = W; canvas.height = H;
+//         var ctx = canvas.getContext('2d');
+//         ctx.fillStyle = '#081510';
+//         ctx.fillRect(0, 0, W, H);
+//         ctx.fillStyle = '#1a3d22';
+//         for (var i = 0; i < 60; i++) {
+//             var bh = Math.random() * H * 0.3 + 2;
+//             ctx.fillRect(i * (W/60), H - bh, W/60 - 1, bh);
+//         }
+//     }
+// 
+//     /* ══════════════════════════════════════════════════════════════════════
+//        MOTOR DE ANÁLISE ESPECTRAL OFFLINE
+//     ══════════════════════════════════════════════════════════════════════ */
+// 
+//     var _PROFILES = {
+//         'Passeriformes':   { lo:0.15, mi:0.60, hi:0.25, ce:0.55, mo:0.75, ha:0.70 },
+//         'Psittaciformes':  { lo:0.20, mi:0.50, hi:0.30, ce:0.52, mo:0.55, ha:0.50 },
+//         'Columbiformes':   { lo:0.55, mi:0.35, hi:0.10, ce:0.28, mo:0.20, ha:0.80 },
+//         'Strigiformes':    { lo:0.50, mi:0.40, hi:0.10, ce:0.32, mo:0.30, ha:0.75 },
+//         'Apodiformes':     { lo:0.05, mi:0.40, hi:0.55, ce:0.72, mo:0.60, ha:0.55 },
+//         'Piciformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.42, mo:0.45, ha:0.45 },
+//         'Accipitriformes': { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
+//         'Falconiformes':   { lo:0.20, mi:0.55, hi:0.25, ce:0.50, mo:0.40, ha:0.55 },
+//         'Galliformes':     { lo:0.60, mi:0.30, hi:0.10, ce:0.25, mo:0.25, ha:0.50 },
+//         'Gruiformes':      { lo:0.35, mi:0.50, hi:0.15, ce:0.40, mo:0.50, ha:0.60 },
+//         'Charadriiformes': { lo:0.10, mi:0.45, hi:0.45, ce:0.65, mo:0.55, ha:0.50 },
+//         'Pelecaniformes':  { lo:0.55, mi:0.35, hi:0.10, ce:0.30, mo:0.20, ha:0.55 },
+//         'Suliformes':      { lo:0.50, mi:0.38, hi:0.12, ce:0.32, mo:0.22, ha:0.52 },
+//         'Tinamiformes':    { lo:0.25, mi:0.65, hi:0.10, ce:0.45, mo:0.15, ha:0.90 },
+//         'Cuculiformes':    { lo:0.30, mi:0.58, hi:0.12, ce:0.42, mo:0.35, ha:0.70 },
+//         'Caprimulgiformes':{ lo:0.30, mi:0.55, hi:0.15, ce:0.43, mo:0.40, ha:0.65 },
+//         'Trogoniformes':   { lo:0.40, mi:0.50, hi:0.10, ce:0.38, mo:0.25, ha:0.72 },
+//         'Coraciiformes':   { lo:0.15, mi:0.50, hi:0.35, ce:0.58, mo:0.45, ha:0.55 },
+//         'Anseriformes':    { lo:0.45, mi:0.42, hi:0.13, ce:0.35, mo:0.35, ha:0.48 }
+//     };
+// 
+//     function _profileDist(a, b) {
+//         var k=['lo','mi','hi','ce','mo','ha'], s=0, d;
+//         for (var i=0;i<k.length;i++){ d=(a[k[i]]||0)-(b[k[i]]||0); s+=d*d; }
+//         return Math.sqrt(s);
+//     }
+// 
+//     function _extractProfile(blob) {
+//         return new Promise(function(resolve, reject) {
+//             var fr = new FileReader();
+//             fr.onerror = reject;
+//             fr.onload = function() {
+//                 var ab = fr.result;
+//                 var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+//                 if (!AudioCtxClass) { reject(new Error('no AudioContext')); return; }
+//                 var ctx;
+//                 try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
+//                 ctx.decodeAudioData(ab, function(buf) {
+//                     try {
+//                         ctx.close();
+//                         var ch   = buf.getChannelData(0);
+//                         var sr   = buf.sampleRate;
+//                         var N    = ch.length;
+//                         var fftN = 2048;
+//                         var hop  = 512;
+//                         var nF   = Math.floor((N - fftN) / hop);
+//                         if (nF < 1) { reject(new Error('short')); return; }
+// 
+//                         var hann = new Float32Array(fftN);
+//                         for (var i=0;i<fftN;i++) hann[i]=0.5*(1-Math.cos(2*Math.PI*i/(fftN-1)));
+// 
+//                         var bins  = fftN/2;
+//                         var acc   = new Float64Array(bins);
+//                         var step  = Math.max(1, Math.floor(nF/50));
+//                         var cnt   = 0;
+//                         var fEnrg = [];
+// 
+//                         for (var f=0;f<nF;f+=step) {
+//                             var st = f*hop;
+//                             var fr2 = new Float32Array(fftN);
+//                             var fe  = 0;
+//                             for (var j=0;j<fftN&&(st+j)<N;j++){
+//                                 fr2[j]=ch[st+j]*hann[j];
+//                                 fe += ch[st+j]*ch[st+j];
+//                             }
+//                             fEnrg.push(fe/fftN);
+//                             // DFT strided
+//                             for (var k=0;k<bins;k++){
+//                                 var re=0,im=0,s2=2*Math.PI*k/fftN;
+//                                 for (var n=0;n<fftN;n+=4){ re+=fr2[n]*Math.cos(s2*n); im-=fr2[n]*Math.sin(s2*n); }
+//                                 acc[k]+=(re*re+im*im);
+//                             }
+//                             cnt++;
+//                         }
+//                         if (cnt===0){ reject(new Error('cnt=0')); return; }
+//                         for (var b=0;b<bins;b++) acc[b]/=cnt;
+// 
+//                         var bHz  = sr/fftN;
+//                         var b2k  = Math.round(2000/bHz);
+//                         var b6k  = Math.round(6000/bHz);
+//                         var lo=0,mi=0,hi=0,tot=0,cN=0,cD=0,pv=0,pb=0;
+//                         for (var b2=1;b2<bins;b2++){
+//                             var e=acc[b2]; tot+=e;
+//                             cN+=b2*bHz*e; cD+=e;
+//                             if(b2<b2k)lo+=e; else if(b2<b6k)mi+=e; else hi+=e;
+//                             if(e>pv){pv=e;pb=b2;}
+//                         }
+//                         if (tot<1e-10){ reject(new Error('silence')); return; }
+//                         var ce=Math.min(1,(cD>0?cN/cD:1000)/10000);
+//                         var mFE=fEnrg.reduce(function(a,b){return a+b;},0)/fEnrg.length;
+//                         var vFE=0; fEnrg.forEach(function(x){vFE+=(x-mFE)*(x-mFE);}); vFE/=fEnrg.length;
+//                         resolve({
+//                             lo:lo/tot, mi:mi/tot, hi:hi/tot, ce:ce,
+//                             mo:Math.min(1,Math.sqrt(vFE)/(mFE+1e-10)),
+//                             ha:Math.min(1,pv/((tot/bins)*10+1e-10)),
+//                             tot:tot, pkHz:pb*bHz
+//                         });
+//                     } catch(ex){ reject(ex); }
+//                 }, function(err){ try{ctx.close();}catch(e){} reject(err||new Error('decode')); });
+//             };
+//             fr.readAsArrayBuffer(blob);
+//         });
+//     }
+// 
+//     function _matchOrders(p) {
+//         var list = [];
+//         for (var order in _PROFILES) {
+//             var dist = _profileDist(p, _PROFILES[order]);
+//             list.push({ order: order, score: Math.max(0, 1 - dist/1.5) });
+//         }
+//         list.sort(function(a,b){ return b.score-a.score; });
+//         return list.slice(0,4);
+//     }
+// 
+//     function _selectCandidates(orders) {
+//         if (typeof BIRD_DATABASE === 'undefined') return [];
+//         var out = [], seen = {};
+//         for (var oi=0;oi<orders.length;oi++){
+//             var order = orders[oi].order, score = orders[oi].score;
+//             var pool = [];
+//             for (var bi=0;bi<BIRD_DATABASE.length;bi++){
+//                 if (BIRD_DATABASE[bi].ordem === order) pool.push(BIRD_DATABASE[bi]);
+//             }
+//             pool.sort(function(){ return Math.random()-0.5; });
+//             var take = pool.slice(0,6);
+//             for (var ti=0;ti<take.length;ti++){
+//                 var bird = take[ti];
+//                 if (seen[bird.scientificName]) continue;
+//                 seen[bird.scientificName] = true;
+//                 var noise = (Math.random()-0.5)*0.15;
+//                 var conf  = Math.round(Math.min(95,Math.max(20,(score+noise)*100)));
+//                 out.push({
+//                     sci:  bird.scientificName,
+//                     com:  bird.commonName,
+//                     conf: conf,
+//                     iucn: (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].iucn||'LC' : 'LC',
+//                     sc:   (window.speciesInfo && window.speciesInfo[bird.scientificName]) ? window.speciesInfo[bird.scientificName].sc||'NE'  : 'NE'
+//                 });
+//             }
+//         }
+//         out.sort(function(a,b){ return b.conf-a.conf; });
+//         return out.slice(0,5);
+//     }
+// 
+//     function _analyze() {
+//         if (_chunks.length === 0 || _busy) return;
+//         _busy = true;
+//         _setAnalyzing(true);
+// 
+//         var mime = _lastMime || 'audio/webm';
+//         var blob = new Blob(_chunks.slice(), { type: mime });
+// 
+//         _extractProfile(blob).then(function(p) {
+//             if (!p || p.tot < 1e-8) {
+//                 _msg('🔇 Áudio muito fraco. Aproxime do microfone.', 'warn');
+//                 _busy = false; _setAnalyzing(false); return;
+//             }
+//             var orders = _matchOrders(p);
+//             var cands  = _selectCandidates(orders);
+//             if (cands.length > 0) { _renderResults(cands); _msg('',''); }
+//             else _msg('Não identificado. Tente gravar mais tempo.', 'info');
+//             _busy = false; _setAnalyzing(false);
+//         }).catch(function(e) {
+//             console.warn('[CampoCanto]', e);
+//             _msg('⚠️ Erro ao processar áudio.', 'error');
+//             _busy = false; _setAnalyzing(false);
+//         });
+//     }
+// 
+//     function _renderResults(birds) {
+//         var cont = $id('campo-canto-results');
+//         if (cont) cont.style.display = 'block';
+// 
+//         for (var i=0;i<birds.length;i++) {
+//             var b = birds[i];
+//             if (_detected[b.sci]) continue;
+//             _detected[b.sci] = true;
+// 
+//             var tier = b.conf >= 80 ? 'high' : b.conf >= 50 ? 'mid' : 'low';
+//             var color = tier==='high' ? '#2ea050' : tier==='mid' ? '#c97a20' : '#888';
+//             var already = _inList(b.sci);
+// 
+//             var list = $id('campo-canto-' + tier + '-list');
+//             var sec  = $id('campo-canto-' + tier + '-section');
+//             if (!list) continue;
+//             if (sec)  sec.style.display = 'block';
+// 
+//             var badge = '';
+//             if (b.sc   && b.sc   !== 'LC' && b.sc   !== 'NE') badge += '<span class="campo-canto-status-badge sc">'  + _escHtml(b.sc)   + '</span>';
+//             if (b.iucn && b.iucn !== 'LC' && b.iucn !== 'NE') badge += '<span class="campo-canto-status-badge iucn">IUCN ' + _escHtml(b.iucn) + '</span>';
+// 
+//             var card = document.createElement('div');
+//             card.className  = 'campo-canto-card campo-canto-card-' + tier + (already ? ' already-added' : '');
+//             card.dataset.sci = b.sci;
+//             card.innerHTML  =
+//                 '<div class="campo-canto-card-info">' +
+//                   '<span class="campo-canto-card-common">' + _escHtml(b.com||b.sci) + '</span>' +
+//                   '<span class="campo-canto-card-sci">'    + _escHtml(b.sci)         + '</span>' +
+//                   '<div class="campo-canto-card-conf">' +
+//                     '<div class="campo-canto-conf-bar-bg">' +
+//                       '<div class="campo-canto-conf-bar" style="width:' + b.conf + '%;background:' + color + ';"></div>' +
+//                     '</div>' +
+//                     '<span class="campo-canto-conf-pct" style="color:' + color + '">' + b.conf + '%</span>' +
+//                   '</div>' +
+//                   '<div class="campo-canto-card-tags">' + badge + '</div>' +
+//                 '</div>' +
+//                 '<button class="campo-canto-add-btn' + (already ? ' added' : '') + '"' +
+//                   ' data-sci="' + _escHtml(b.sci) + '"' +
+//                   ' title="' + (already ? 'Já adicionada' : 'Adicionar à lista') + '"' +
+//                   (already ? ' disabled' : '') + '>' +
+//                   (already ? '✓' : '➕') +
+//                 '</button>';
+// 
+//             // Usa addEventListener em vez de onclick inline — compatível com CSP e todos os browsers
+//             var addBtn = card.querySelector('.campo-canto-add-btn');
+//             if (addBtn && !already) {
+//                 (function(btn, sci){ btn.addEventListener('click', function(){ window.campCantoAddSpecies(btn, sci); }); })(addBtn, b.sci);
+//             }
+//             list.appendChild(card);
+//         }
+//     }
+// 
+//     /* ── Converte blob → WAV PCM 16-bit ─────────────────────────────────── */
+//     function _toWav(blob) {
+//         return new Promise(function(resolve, reject) {
+//             var fr = new FileReader();
+//             fr.onerror = reject;
+//             fr.onload = function() {
+//                 var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+//                 if (!AudioCtxClass) { reject(new Error('no ctx')); return; }
+//                 var ctx;
+//                 try { ctx = new AudioCtxClass(); } catch(e){ reject(e); return; }
+//                 ctx.decodeAudioData(fr.result, function(buf) {
+//                     try {
+//                         ctx.close();
+//                         var nCh  = buf.numberOfChannels;
+//                         var sr   = buf.sampleRate;
+//                         var nSmp = buf.length;
+//                         var bps  = 2;
+//                         var dSz  = nSmp * nCh * bps;
+//                         var ab   = new ArrayBuffer(44 + dSz);
+//                         var v    = new DataView(ab);
+//                         var ws = function(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+//                         ws(0,'RIFF'); v.setUint32(4,36+dSz,true); ws(8,'WAVE');
+//                         ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+//                         v.setUint16(22,nCh,true); v.setUint32(24,sr,true);
+//                         v.setUint32(28,sr*nCh*bps,true); v.setUint16(32,nCh*bps,true);
+//                         v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,dSz,true);
+//                         var off = 44;
+//                         for (var i=0;i<nSmp;i++) for (var c=0;c<nCh;c++){
+//                             var s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));
+//                             v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2;
+//                         }
+//                         resolve(new Blob([ab],{type:'audio/wav'}));
+//                     } catch(ex){ reject(ex); }
+//                 }, reject);
+//             };
+//             fr.readAsArrayBuffer(blob);
+//         });
+//     }
+// 
+//     function _triggerDownload(blob, name, type) {
+//         var url = URL.createObjectURL(blob);
+//         var a   = document.createElement('a');
+//         a.href = url; a.download = name; a.style.display = 'none';
+//         document.body.appendChild(a); a.click();
+//         setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 3000);
+//     }
+// 
+//     function _fileName(ext) {
+//         var d=new Date(), p=function(n){return String(n).padStart(2,'0');};
+//         return 'canto_' + d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+'.'+ext;
+//     }
+// 
+//     /* ── Inicialização ──────────────────────────────────────────────────── */
+//     function _init() {
+//         var header  = $id('campo-canto-id-toggle');
+//         var body    = $id('campo-canto-id-body');
+//         var chevron = $id('campo-canto-id-chevron');
+// 
+//         if (header && body) {
+//             // Força abertura inicial via style (sobrepõe qualquer CSS)
+//             _open = true;
+//             body.style.display    = 'flex';
+//             body.style.flexDirection = 'column';
+//             if (chevron) chevron.textContent = '▲';
+// 
+//             header.addEventListener('click', function() {
+//                 _open = !_open;
+//                 body.style.display = _open ? 'flex' : 'none';
+//                 if (chevron) chevron.textContent = _open ? '▲' : '▼';
+//             });
+//             // Touch events explícitos para iOS
+//             header.addEventListener('touchend', function(e) {
+//                 e.preventDefault();
+//                 _open = !_open;
+//                 body.style.display = _open ? 'flex' : 'none';
+//                 if (chevron) chevron.textContent = _open ? '▲' : '▼';
+//             });
+//         }
+// 
+//         // Canvas idle
+//         setTimeout(function(){ _drawIdle(); }, 100);
+//     }
+// 
+//     if (document.readyState === 'loading') {
+//         document.addEventListener('DOMContentLoaded', _init);
+//     } else {
+//         _init();
+//     }
+// 
+// })();
+// // ==================== FIM GRAVADOR DE CANTO ====================
+// ==================== FIM GRAVADOR DE CANTO (DESATIVADO) ====================
 
 // ==================== MÓDULO: RELATÓRIO PDF ACADÊMICO ====================
 (function initAcademicPDFReport() {
@@ -14638,7 +14833,23 @@ if (document.readyState === 'loading') {
             '2. Lista de espécies registradas',
             '3. Status de conservação',
             '4. Índices de diversidade',
-            '5. Referências bibliográficas'
+            '5. Cadeia alimentar',
+            '6. Guilda alimentar',
+            '7. Descritores das espécies',
+            '8. Distribuição taxonômica',
+            '9. Espécies indicadoras',
+            '10. Análise de cluster',
+            '11. Picos de horários de atividade',
+            '12. Cálculo de esforço de avistamentos',
+            '13. Rarefação de riqueza',
+            '14. Sazonalidade',
+            '15. Fenologia',
+            '16. Turnover temporal',
+            '17. Rank-abundância',
+            '18. Matriz de co-ocorrência',
+            '19. Curvas de acumulação',
+            '20. Darwin Core',
+            '21. Referências bibliográficas'
         ];
         sections.forEach((s, i) => {
             bodyText(s);
@@ -14650,7 +14861,7 @@ if (document.readyState === 'loading') {
         sectionTitle('1. INTRODUÇÃO');
         bodyText('Este relatório foi gerado automaticamente pela plataforma Ornitologia SC, uma ferramenta digital para análise e catalogação de aves com ocorrência em Santa Catarina. As análises seguem protocolos padronizados de ecologia de comunidades, com base nas listas taxonômicas e de conservação vigentes.');
         y += 3;
-        bodyText(`Foram registradas ${imported.length} espécie(s) nesta sessão de análise. Os dados taxonômicos seguem Pacheco et al. (2021) — segunda edição do CBRO — e as listas de conservação consultadas são: Lista Vermelha de SC, Lista ICMBio (fauna ameaçada do Brasil) e Lista Vermelha IUCN (global).`);
+        bodyText(`Foram registradas ${imported.length} espécie(s) nesta sessão de análise. Os dados taxonômicos seguem Pacheco et al. (2021) — segunda edição do CBRO — e as listas de conservação consultadas são: Lista Vermelha de SC, Lista ICMBio (fauna ameaçada do Brasil) e Lista Vermelha IUCN (global). Este relatório consolida automaticamente os resultados de TODAS as análises executadas pelo usuário nas demais abas da plataforma (cadeia alimentar, guilda, descritores, distribuição taxonômica, indicadoras, cluster, picos de horário, esforço de avistamentos, rarefação, sazonalidade, fenologia, turnover, rank-abundância, co-ocorrência, curvas de acumulação e Darwin Core). Análises que não tenham sido executadas pelo usuário durante a sessão aparecerão indicadas como "não executada".`);
         y += 5;
 
         // ── 2. LISTA DE ESPÉCIES ─────────────────────────────────────────
@@ -14747,9 +14958,178 @@ if (document.readyState === 'loading') {
         y += 6;
         bodyText('Referências metodológicas: Shannon (1948), Simpson (1949), Pielou (1966), Chao (1984), Hurlbert (1971).');
 
-        // ── 5. REFERÊNCIAS ───────────────────────────────────────────────
+        // ── HELPERS GENÉRICOS DE CAPTURA (para incluir TODAS as análises no PDF) ──
+        function isElVisibleWithContent(el) {
+            if (!el) return false;
+            const txt = el.textContent ? el.textContent.trim() : '';
+            return txt.length > 0 || el.querySelector('canvas, svg, table');
+        }
+
+        function addCanvasImage(canvasId, label) {
+            const cv = document.getElementById(canvasId);
+            if (!cv || !cv.width || !cv.height) return false;
+            try {
+                const dataUrl = cv.toDataURL('image/png', 1.0);
+                if (!dataUrl || dataUrl.length < 100) return false;
+                const ratio = cv.height / cv.width;
+                let imgW = contentW * 0.92;
+                let imgH = imgW * ratio;
+                const maxH = 95;
+                if (imgH > maxH) { imgH = maxH; imgW = imgH / ratio; }
+                checkY(imgH + 10);
+                if (label) { bodyText(label, { style: 'bold', size: 9 }); y += 1; }
+                doc.addImage(dataUrl, 'PNG', margin + (contentW - imgW) / 2, y, imgW, imgH);
+                y += imgH + 6;
+                return true;
+            } catch (e) { return false; }
+        }
+
+        function addTableFromElement(elId, opts = {}) {
+            const root = document.getElementById(elId);
+            if (!root) return false;
+            const table = root.tagName === 'TABLE' ? root : (root.tagName === 'TBODY' ? root.closest('table') : root.querySelector('table'));
+            if (!table) return false;
+            const headRow = table.querySelector('thead tr');
+            const bodyRows = table.querySelectorAll('tbody tr');
+            if (!bodyRows.length) return false;
+            const headers = headRow ? [...headRow.querySelectorAll('th')].map(th => th.textContent.trim().replace(/[↕↑↓]/g, '').trim()) : [];
+            const nCols = headers.length || (bodyRows[0] ? bodyRows[0].querySelectorAll('td,th').length : 0);
+            if (!nCols) return false;
+            const colW = Array(nCols).fill(contentW / nCols);
+            if (headers.length) tableRow(headers, colW, true, [27, 67, 50]);
+            const maxRows = opts.maxRows || 60;
+            [...bodyRows].slice(0, maxRows).forEach((tr, i) => {
+                const cells = [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim());
+                while (cells.length < nCols) cells.push('');
+                const bg = i % 2 === 0 ? [245, 250, 245] : null;
+                tableRow(cells.slice(0, nCols), colW, false, bg);
+            });
+            if (bodyRows.length > maxRows) {
+                bodyText(`... (+${bodyRows.length - maxRows} linha(s) adicionais não exibidas — exporte o CSV da aba correspondente para a lista completa)`, { size: 8, color: [120,120,120] });
+            }
+            return true;
+        }
+
+        function addTextBlock(elId, opts = {}) {
+            const el = document.getElementById(elId);
+            if (!el) return false;
+            const txt = el.innerText ? el.innerText.trim() : el.textContent.trim();
+            if (!txt) return false;
+            bodyText(txt, opts);
+            y += 2;
+            return true;
+        }
+
+        function addAnalysisSection(num, title, builders) {
+            // builders: array of functions, each returns true if rendered something
+            let rendered = false;
+            const tmpY = y;
+            checkY(18);
+            sectionTitle(`${num}. ${title.toUpperCase()}`);
+            const startY = y;
+            builders.forEach(fn => { try { if (fn()) rendered = true; } catch(e) { /* ignora análise não preenchida */ } });
+            if (!rendered) {
+                bodyText('Esta análise ainda não foi executada nesta sessão (sem dados gerados na aba correspondente).', { color: [140,140,140], style: 'italic' });
+            }
+            y += 4;
+        }
+
+        // ── 5+. TODAS AS DEMAIS ANÁLISES DA PLATAFORMA ─────────────────────
         newPage();
-        sectionTitle('5. REFERÊNCIAS BIBLIOGRÁFICAS');
+        addAnalysisSection(5, 'Cadeia Alimentar', [
+            () => addTextBlock('foodchain-stats-row'),
+            () => addTableFromElement('foodchain-table-container')
+        ]);
+
+        addAnalysisSection(6, 'Guilda Alimentar', [
+            () => addCanvasImage('guild-pie-guilda', 'Distribuição por Guilda'),
+            () => addCanvasImage('guild-pie-habitat', 'Distribuição por Habitat'),
+            () => addTableFromElement('guild-table-container')
+        ]);
+
+        newPage();
+        addAnalysisSection(7, 'Descritores das Espécies (Autoria Taxonômica)', [
+            () => addTextBlock('desc-stats-row'),
+            () => addTableFromElement('desc-table-container')
+        ]);
+
+        addAnalysisSection(8, 'Distribuição Taxonômica (Ordens e Famílias)', [
+            () => addCanvasImage('ordemBarChart', 'Distribuição por Ordens (barras)'),
+            () => addCanvasImage('ordemPieChart', 'Distribuição por Ordens (pizza)'),
+            () => addCanvasImage('familiaBarChart', 'Distribuição por Famílias (barras)'),
+            () => addCanvasImage('familiaPieChart', 'Distribuição por Famílias (pizza)')
+        ]);
+
+        newPage();
+        addAnalysisSection(9, 'Espécies Indicadoras', [
+            () => addTableFromElement('indicadoras-results'),
+            () => addCanvasImage('indicadorasChart'),
+            () => addTextBlock('indicadoras-analysis')
+        ]);
+
+        addAnalysisSection(10, 'Análise de Cluster (Similaridade entre Amostras)', [
+            () => addTableFromElement('cluster-matrix-wrap')
+        ]);
+
+        newPage();
+        addAnalysisSection(11, 'Picos de Horários de Atividade', [
+            () => addCanvasImage('picosHorariosChart'),
+            () => addTextBlock('picos-stats')
+        ]);
+
+        addAnalysisSection(12, 'Cálculo de Esforço de Avistamentos', [
+            () => addTableFromElement('calculo-table-body') || addTableFromElement('calculo-section')
+        ]);
+
+        newPage();
+        addAnalysisSection(13, 'Rarefação de Riqueza', [
+            () => addCanvasImage('rarefChart'),
+            () => addTextBlock('raref-stats')
+        ]);
+
+        addAnalysisSection(14, 'Sazonalidade das Espécies', [
+            () => addCanvasImage('sazonChart'),
+            () => addCanvasImage('sazonEstacaoChart'),
+            () => addTextBlock('sazon-stats')
+        ]);
+
+        newPage();
+        addAnalysisSection(15, 'Fenologia (Período de Atividade por Espécie)', [
+            () => addCanvasImage('fenolChart'),
+            () => addTableFromElement('fenol-table-wrap'),
+            () => addTextBlock('fenol-analysis')
+        ]);
+
+        addAnalysisSection(16, 'Turnover Temporal de Comunidades', [
+            () => addCanvasImage('turnoverChart'),
+            () => addTableFromElement('turnover-results'),
+            () => addTextBlock('turnover-summary')
+        ]);
+
+        newPage();
+        addAnalysisSection(17, 'Rank-Abundância', [
+            () => addCanvasImage('rankabundChart'),
+            () => addTextBlock('rankabund-analysis')
+        ]);
+
+        addAnalysisSection(18, 'Matriz de Co-ocorrência de Espécies', [
+            () => addTableFromElement('cooc-matrix-container'),
+            () => addTextBlock('cooc-top-pairs'),
+            () => addTextBlock('cooc-matrix-analysis')
+        ]);
+
+        newPage();
+        addAnalysisSection(19, 'Curvas de Acumulação / Coletor', [
+            () => addTextBlock('curve-stats')
+        ]);
+
+        addAnalysisSection(20, 'Darwin Core (Padronização de Dados)', [
+            () => addTableFromElement('darwincore-result')
+        ]);
+
+        // ── 21. REFERÊNCIAS ───────────────────────────────────────────────
+        newPage();
+        sectionTitle('21. REFERÊNCIAS BIBLIOGRÁFICAS');
 
         const refs = [
             'Chao, A. (1984). Non-parametric estimation of the number of classes. Scandinavian Journal of Statistics, 11(4):265–270.',
