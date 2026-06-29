@@ -1797,12 +1797,22 @@
             <li>Dois gráficos de rosca mostram a composição por dieta e por tipo de habitat (florestal, aquático, campestre, generalista).</li>
         </ul>
 
-        <!-- ── 12. DESCRITORES ── -->
-        <h3 id="h-descrit" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">12. 🏷️ Descritores Taxonômicos</h3>
+        <!-- ── 12. CADEIA ALIMENTAR ── -->
+        <h3 id="h-cadeia" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">12. 🔗 Cadeia Alimentar</h3>
+        <p style="font-size:13.5px;">Monta automaticamente uma <strong>cadeia/pirâmide trófica</strong> com as espécies que você importou, usando a mesma guilda alimentar da aba 🍽️ Guilda. As espécies são organizadas em níveis tróficos, do topo (predadores) até a base (consumidores primários), com base no conceito de Lindeman (1942) e na dieta de aves segundo Sick (1997) e Wilman et al. (2014 — EltonTraits).</p>
+        <ul style="margin-left:20px;font-size:13.5px;">
+            <li>🦅 <strong>Nível 4 — Topo:</strong> Carnívoros, Piscívoros e Cleptoparasitas (ex: gaviões, martins-pescadores).</li>
+            <li>🐦 <strong>Nível 3 — Secundários:</strong> Insetívoros, Onívoros e Malacófagos.</li>
+            <li>🌱 <strong>Nível 2 — Primários:</strong> Herbívoros, Frugívoros, Granívoros, Nectarívoros e Filtradores.</li>
+            <li>♻️ <strong>Decompositores:</strong> Detritívoros, exibidos separadamente como recicladores de matéria orgânica.</li>
+            <li>A pirâmide visual mostra as espécies em "chips" coloridos dentro de cada faixa, com setas indicando o fluxo de energia da base para o topo.</li>
+            <li>A tabela detalhada e o botão "⬇️ Exportar CSV" permitem usar os dados em relatórios.</li>
+        </ul>
+        <h3 id="h-descrit" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">13. 🏷️ Descritores Taxonômicos</h3>
         <p style="font-size:13.5px;">Quem deu o nome científico a cada espécie e em que ano? Por exemplo, <em>Turdus rufiventris</em> foi descrito por Vieillot em 1818. Curiosidade histórica e dado formal para artigos científicos. Filtros por século, autor e busca textual.</p>
 
         <!-- ── 13. RAREFAÇÃO ── -->
-        <h3 id="h-raref" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">13. 📉 Rarefação de Riqueza</h3>
+        <h3 id="h-raref" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">14. 📉 Rarefação de Riqueza</h3>
         <p style="font-size:13.5px;"><strong>Problema que resolve:</strong> você amostrou a Floresta A em 3 dias e a Floresta B em 10 dias, e encontrou mais espécies na B. Isso é por causa do esforço diferente — ou porque B realmente é mais rica? A rarefação <em>padroniza</em> o esforço para a comparação ser justa.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Clique em <strong>"➕ Adicionar Área"</strong>, informe o número de amostras e a riqueza estimada. Compare as curvas lado a lado.</li>
@@ -1811,7 +1821,7 @@
         </ul>
 
         <!-- ── 14. SAZONALIDADE ── -->
-        <h3 id="h-sazon" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">14. 📅 Sazonalidade</h3>
+        <h3 id="h-sazon" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">15. 📅 Sazonalidade</h3>
         <p style="font-size:13.5px;">Mostra em quais meses do ano cada espécie aparece mais. SC tem quatro estações bem marcadas e muitas aves migratórias — esta aba revela esses padrões.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos:</strong> o mês real é detectado automaticamente a partir da data.</li>
@@ -1820,7 +1830,7 @@
         </ul>
 
         <!-- ── 15. FENOLOGIA ── -->
-        <h3 id="h-fenol" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">15. 🌸 Fenologia</h3>
+        <h3 id="h-fenol" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">16. 🌸 Fenologia</h3>
         <p style="font-size:13.5px;">Mostra o <strong>período de atividade</strong> de cada espécie — da primeira à última detecção registrada. O gráfico é um <em>fenograma de Gantt</em> colorido por estação (🔴 Verão · 🟠 Outono · 🔵 Inverno · 🟢 Primavera).</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos:</strong> o jeito mais fácil — usa as datas já registradas.</li>
@@ -1830,7 +1840,7 @@
         </ul>
 
         <!-- ── 16. TURNOVER ── -->
-        <h3 id="h-turnover" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">16. 🔄 Turnover Temporal</h3>
+        <h3 id="h-turnover" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">17. 🔄 Turnover Temporal</h3>
         <p style="font-size:13.5px;"><strong>O que mede?</strong> A renovação da comunidade ao longo do tempo — quantas espécies <em>entraram</em> e quantas <em>saíram</em> entre dois períodos consecutivos. Uma taxa alta indica uma comunidade muito dinâmica ou instável.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos por data:</strong> cada data de campo vira um período automaticamente.</li>
@@ -1840,7 +1850,7 @@
         </ul>
 
         <!-- ── 17. INDICADORAS ── -->
-        <h3 id="h-indicad" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">17. ⚠️ Espécies Indicadoras</h3>
+        <h3 id="h-indicad" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">18. ⚠️ Espécies Indicadoras</h3>
         <p style="font-size:13.5px;">Identifica quais espécies importadas são as mais <strong>sensíveis à perturbação ambiental</strong> — as primeiras a desaparecer com fragmentação, poluição ou degradação do habitat. Baseado em critérios científicos (Karr, 1981; Stouffer &amp; Bierregaard 1995; Sekercioglu et al., 2004).</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Escolha o limiar mínimo de ameaça (ex: "VU ou mais") e clique em ▶ para executar.</li>
@@ -1849,7 +1859,7 @@
         </ul>
 
         <!-- ── 18. CLUSTER ── -->
-        <h3 id="h-cluster" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">18. 🌿 Cluster Hierárquico (Dendrograma)</h3>
+        <h3 id="h-cluster" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">19. 🌿 Cluster Hierárquico (Dendrograma)</h3>
         <p style="font-size:13.5px;">Cria um <strong>dendrograma</strong> — diagrama em árvore mostrando quais áreas/listas são mais parecidas entre si. Ramos que se unem cedo = comunidades muito similares. Ramos que só se unem no final = muito diferentes. Usa o índice de Jaccard.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Requer pelo menos 2 listas processadas na aba 🔀 Comparar.</li>
@@ -1858,7 +1868,7 @@
         </ul>
 
         <!-- ── 19. RANK-ABUNDÂNCIA ── -->
-        <h3 id="h-rank" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">19. 📊 Rank-Abundância (Whittaker Plot)</h3>
+        <h3 id="h-rank" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">20. 📊 Rank-Abundância (Whittaker Plot)</h3>
         <p style="font-size:13.5px;">Ordena as espécies da mais para a menos abundante e plota a curva. <strong>Curva íngreme</strong> = poucas espécies dominam (baixa equitabilidade — comum em ambientes perturbados). <strong>Curva suave</strong> = distribuição mais equilibrada.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos:</strong> usa a contagem real de cada espécie — muito mais preciso que atribuir 1 para cada.</li>
@@ -1867,13 +1877,36 @@
         </ul>
 
         <!-- ── 20. CO-OCORRÊNCIA ── -->
-        <h3 id="h-cooc" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">20. 🔗 Co-ocorrência e Rede</h3>
+        <h3 id="h-cooc" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">21. 🔗 Co-ocorrência e Rede</h3>
         <p style="font-size:13.5px;">Mostra quais espécies tendem a aparecer juntas nos mesmos levantamentos. Alta co-ocorrência pode indicar habitat compartilhado, relação ecológica ou distribuições sobrepostas.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos por data:</strong> cada data vira um levantamento automático.</li>
             <li>A <strong>matriz de co-ocorrência</strong> mostra quantas vezes cada par de espécies foi detectado junto. Células mais escuras = maior co-ocorrência.</li>
             <li>📊 Gráfico de barras dos pares mais frequentes. Botão "Copiar lista" exporta para área de transferência.</li>
             <li>🕸️ <strong>Rede de Co-ocorrência:</strong> visualização gráfica interativa. Nós = espécies; espessura da aresta = frequência de co-ocorrência; cor do nó = guilda alimentar. Arraste os nós, use scroll para zoom. A tabela abaixo permite esconder taxons individuais da rede com um clique.</li>
+        </ul>
+
+        <!-- ── 22. MODO CAMPO ── -->
+        <h3 id="h-campo" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">22. 🌿 Modo Campo (Registro em Tempo Real)</h3>
+        <p style="font-size:13.5px;">Abra pelo botão <strong>🌿</strong> no canto superior da página. É a ferramenta para usar <em>durante</em> a saída de campo, no celular, registrando espécies com GPS e acompanhando a rota percorrida em tempo real.</p>
+        <ul style="margin-left:20px;font-size:13.5px;">
+            <li>📍 O <strong>GPS</strong> é ativado automaticamente ao abrir o Modo Campo e atualiza sua posição no mini-mapa continuamente.</li>
+            <li>▶ <strong>Iniciar Campo:</strong> clique para começar o rastreamento. A partir desse momento o site traça sua <strong>rota em azul</strong> no mapa, conta o <strong>tempo decorrido</strong> (⏱️) e calcula a <strong>quilometragem percorrida</strong> (📏) em tempo real, a cada nova leitura de GPS.</li>
+            <li>🔭 <strong>Registrar Espécie:</strong> a cada registro feito durante o campo, o sistema grava automaticamente quantos quilômetros você já havia percorrido na rota até aquele ponto — útil para análises de esforço de busca por espécie.</li>
+            <li>⏹ <strong>Finalizar Campo:</strong> encerra o rastreamento e mostra um resumo (duração, km total, espécies registradas) com a opção <strong>"Deseja baixar os dados do campo?"</strong>.</li>
+            <li>⬇️ Ao confirmar o download, é gerado um arquivo Excel (.xlsx) com três abas: <strong>Resumo</strong> (início, término, duração, km total), <strong>Registros</strong> (tabela completa com km acumulado e km desde o registro anterior para cada espécie) e <strong>Rota GPS</strong> (todos os pontos brutos coletados).</li>
+            <li>⚙️ O painel de configurações do Modo Campo também permite exportar para Excel/PDF, copiar a tabela e importar os registros diretamente para a aba 🔭 Avistamentos.</li>
+            <li><em>Observação: a identificação automática de espécie por gravação de canto/áudio foi descontinuada nesta versão por instabilidade e não está mais disponível — use o cadastro manual com busca por nome.</em></li>
+        </ul>
+
+        <!-- ── 23. RELATÓRIO PRELIMINAR ── -->
+        <h3 id="h-relatorio" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">23. 📄 Relatório Preliminar (PDF)</h3>
+        <p style="font-size:13.5px;">Abra pelo botão <strong>📄</strong> no topo da página. Gera um <strong>PDF acadêmico completo</strong> com capa, sumário e referências bibliográficas, consolidando <strong>todos os resultados das análises já executadas</strong> nesta sessão — não apenas a lista de espécies.</p>
+        <ul style="margin-left:20px;font-size:13.5px;">
+            <li>Inclui: lista de espécies, status de conservação, índices de diversidade, cadeia alimentar, guilda alimentar, descritores, distribuição taxonômica, indicadoras, cluster, picos de horário, esforço de avistamentos, rarefação, sazonalidade, fenologia, turnover, rank-abundância, co-ocorrência, curvas de acumulação e Darwin Core.</li>
+            <li>Cada análise aparece com seus gráficos (capturados como imagem) e tabelas de resultados, exatamente como você os configurou nas respectivas abas.</li>
+            <li>Se uma análise específica ainda não foi executada na sessão, o relatório indica <em>"não executada"</em> naquela seção, em vez de omiti-la — assim você sabe exatamente o que falta gerar antes de fechar o relatório final.</li>
+            <li><strong>Dica:</strong> execute as análises que deseja incluir (clique nas abas e gere os gráficos/tabelas) antes de clicar em 📄, pois o relatório captura o que está renderizado na tela naquele momento.</li>
         </ul>
 
         <!-- ── DICAS ── -->
@@ -1887,6 +1920,7 @@
                 <li>📥 Se um nome não for reconhecido, tente o nome científico (ex: <em>Turdus rufiventris</em> em vez de "sabiá") ou verifique a ortografia. O modal de correção de avistamentos também ajuda.</li>
                 <li>🔀 A aba <strong>Comparar</strong> exige clicar em <strong>"Processar Lista"</strong> em cada lista antes de executar a comparação.</li>
                 <li>🦜 A animação do papagaio indica que o sistema está processando. Aguarde — ela desaparece quando terminar.</li>
+                <li>📄 O <strong>Relatório Preliminar</strong> (botão 📄) só inclui gráficos/tabelas das análises que você já executou na sessão atual — navegue pelas abas e gere os resultados desejados antes de exportar o PDF.</li>
                 <li>❓ Este guia sempre pode ser acessado pelo botão <strong>?</strong> no canto superior direito.</li>
             </ul>
         </div>
@@ -1933,19 +1967,21 @@
     <!-- Mini map -->
     <div id="campo-map" class="campo-map-container"></div>
 
-    <!-- ── Identificador de Canto (inline no Modo Campo) ── -->
-    <div id="campo-canto-id-panel" class="campo-canto-id-panel">
+    <!--
+    ════════════════════════════════════════════════════════════════════════
+    IDENTIFICADOR DE CANTO (ÁUDIO) — DESATIVADO
+    O painel abaixo (gravação e identificação automática por canto) foi
+    inteiramente comentado pois não estava funcionando corretamente.
+    O HTML foi mantido (não removido) para referência/futura manutenção.
+    Substituído pelo painel "Iniciar Campo" (rastreamento de rota em tempo real).
+    ════════════════════════════════════════════════════════════════════════
 
-        <!-- Cabeçalho colapsável -->
+    <div id="campo-canto-id-panel" class="campo-canto-id-panel">
         <div class="campo-canto-id-header" id="campo-canto-id-toggle">
             <span class="campo-canto-id-title">🎵 Identificar pelo Canto</span>
             <span class="campo-canto-id-chevron" id="campo-canto-id-chevron">▼</span>
         </div>
-
-        <!-- Corpo (colapsável) -->
         <div id="campo-canto-id-body" class="campo-canto-id-body">
-
-            <!-- Zona de waveform -->
             <div id="campo-canto-waveform" class="campo-canto-waveform">
                 <canvas id="campo-canto-canvas"></canvas>
                 <div class="campo-canto-waveform-info">
@@ -1953,8 +1989,6 @@
                     <span id="campo-canto-status" class="campo-canto-hint">Pressione ⏺ para gravar</span>
                 </div>
             </div>
-
-            <!-- Controles -->
             <div class="campo-canto-controls">
                 <button id="campo-canto-start-btn" class="campo-canto-btn campo-canto-btn-rec" onclick="campCantoStart()">
                     ⏺ Gravar
@@ -1962,23 +1996,16 @@
                 <button id="campo-canto-stop-btn" class="campo-canto-btn campo-canto-btn-stop" onclick="campCantoStop()" style="display:none;">
                     ⏹ Parar
                 </button>
-                <!-- Botão download MP3 — aparece após gravar -->
                 <button id="campo-canto-dl-btn" class="campo-canto-btn campo-canto-btn-dl" onclick="campCantoDownloadAudio()" style="display:none;" title="Baixar gravação em MP3/WebM">
                     ⬇️ MP3
                 </button>
                 <span id="campo-canto-live-badge" class="campo-canto-live-badge" style="display:none;">🔴 Ao vivo</span>
             </div>
-
-            <!-- Spinner de análise -->
             <div id="campo-canto-analyzing" class="campo-canto-analyzing" style="display:none;">
                 <div class="campo-canto-spin"></div>
                 <span>Analisando canto…</span>
             </div>
-
-            <!-- Resultados separados por confiança -->
             <div id="campo-canto-results" class="campo-canto-results" style="display:none;">
-
-                <!-- Seção ≥ 80%: Alta confiança -->
                 <div id="campo-canto-high-section" style="display:none;">
                     <div class="campo-canto-section-label campo-canto-section-high">
                         🎯 Alta confiança <span class="campo-canto-section-sub">(≥ 80%)</span>
@@ -1986,16 +2013,12 @@
                     </div>
                     <div id="campo-canto-high-list" class="campo-canto-result-list"></div>
                 </div>
-
-                <!-- Seção 50–79%: Possível -->
                 <div id="campo-canto-mid-section" style="display:none;">
                     <div class="campo-canto-section-label campo-canto-section-mid">
                         🔍 Possível <span class="campo-canto-section-sub">(50–79%)</span>
                     </div>
                     <div id="campo-canto-mid-list" class="campo-canto-result-list"></div>
                 </div>
-
-                <!-- Seção < 50%: Improvável (colapsada por padrão) -->
                 <div id="campo-canto-low-section" style="display:none;">
                     <div class="campo-canto-section-label campo-canto-section-low" onclick="campCantoToggleLow()" style="cursor:pointer;">
                         ❔ Baixa confiança <span class="campo-canto-section-sub">(&lt; 50%)</span>
@@ -2003,12 +2026,51 @@
                     </div>
                     <div id="campo-canto-low-list" class="campo-canto-result-list" style="display:none;"></div>
                 </div>
-
             </div>
-
-            <!-- Mensagem -->
             <div id="campo-canto-msg" class="campo-canto-msg" style="display:none;"></div>
+        </div>
+    </div>
+    -->
 
+    <!-- ── NOVO: Painel "Iniciar Campo" — rastreamento de rota em tempo real ── -->
+    <div id="campo-track-panel" class="campo-canto-id-panel">
+        <div class="campo-canto-id-header" id="campo-track-id-toggle">
+            <span class="campo-canto-id-title">🧭 Rastreamento de Campo (Rota)</span>
+            <span class="campo-canto-id-chevron" id="campo-track-id-chevron">▼</span>
+        </div>
+        <div id="campo-track-id-body" class="campo-canto-id-body">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:6px 2px;">
+                <span id="campo-track-status-badge" style="font-size:12.5px; font-weight:700; color:#888;">⏸️ Campo não iniciado</span>
+            </div>
+            <div id="campo-track-stats" style="display:flex; flex-wrap:wrap; gap:10px; padding:4px 2px 10px;">
+                <span class="campo-canto-hint" id="campo-track-time">⏱️ 00:00:00</span>
+                <span class="campo-canto-hint" id="campo-track-km">📏 0,00 km</span>
+                <span class="campo-canto-hint" id="campo-track-points">📍 0 pontos de rota</span>
+            </div>
+            <div class="campo-canto-controls">
+                <button id="campo-track-start-btn" class="campo-canto-btn campo-canto-btn-rec" onclick="campTrackStart()">
+                    ▶ Iniciar Campo
+                </button>
+                <button id="campo-track-stop-btn" class="campo-canto-btn campo-canto-btn-stop" onclick="campTrackStop()" style="display:none;">
+                    ⏹ Finalizar Campo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Modal: deseja baixar dados do campo? (aparece ao Finalizar Campo) ── -->
+    <div id="campo-track-finish-modal" class="campo-reg-modal" style="display:none;">
+        <div class="campo-reg-modal-box">
+            <div class="campo-reg-modal-header">
+                <span>🏁 Campo Finalizado</span>
+                <button id="campo-track-finish-close" class="campo-panel-x">✕</button>
+            </div>
+            <div class="campo-reg-modal-body">
+                <p style="font-size:13.5px; line-height:1.6; margin-bottom:14px;" id="campo-track-finish-summary"></p>
+                <p style="font-size:13.5px; font-weight:600; margin-bottom:10px;">Deseja baixar os dados do campo (rota, tempo, km e registros)?</p>
+                <button id="campo-track-finish-download" class="campo-register-btn">⬇️ Baixar Dados do Campo</button>
+                <button id="campo-track-finish-skip" class="campo-register-btn" style="background:#9e9e9e; margin-top:8px;">Não, agora não</button>
+            </div>
         </div>
     </div>
 
