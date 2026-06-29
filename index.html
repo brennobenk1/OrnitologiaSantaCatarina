@@ -143,6 +143,7 @@
                 <button class="tab-btn" data-tab="map-section">🗺️ Mapa</button>
                 <button class="tab-btn" data-tab="compare-section">🔀 Comparar</button>
                 <button class="tab-btn" data-tab="guild-section">🍽️ Guilda</button>
+                <button class="tab-btn" data-tab="foodchain-section">🔗 Cadeia Alimentar</button>
                 <button class="tab-btn" data-tab="descriptor-section">🏷️ Descritores</button>
                 <button class="tab-btn" data-tab="indicadoras-section">⚠️ Indicadoras</button>
                 <button class="tab-btn" data-tab="cluster-section">🌿 Cluster</button>
@@ -805,6 +806,57 @@
             <button id="guild-export-csv" class="export-btn">⬇️ Exportar CSV</button>
             <button id="guild-copy" class="export-btn">📋 Copiar Tabela</button>
             <span id="guild-count" style="align-self:center; font-size:13px; color:var(--text-muted);"></span>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== ABA CADEIA ALIMENTAR ==================== -->
+<section class="app-section tab-section" id="foodchain-section">
+    <div class="section-header" style="cursor:default; margin-bottom:20px;">
+        <span class="collapse-indicator" style="display:none;"></span>
+        <h2>🔗 Cadeia Alimentar das Espécies Importadas</h2>
+    </div>
+    <div class="section-content">
+
+        <div style="background:var(--green-mist); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 18px; font-size:13.5px; line-height:1.7; color:var(--text-mid); margin-bottom:20px;">
+            A cadeia é construída automaticamente a partir da <strong>guilda alimentar</strong> de cada espécie importada (mesma base de dados da aba 🍽️ Guilda), agrupando-as em níveis tróficos segundo o conceito clássico de Lindeman (1942) e adaptado para avifauna brasileira com base em Sick (1997, "Ornitologia Brasileira"), Wilman <em>et al.</em> (2014, "EltonTraits 1.0") e Sigrist (2014, "Avifauna Brasileira"). Espécies com dieta mista (ex.: "Insetívoro/Carnívoro") são posicionadas pelo componente trófico de maior nível.
+        </div>
+
+        <div id="foodchain-empty-msg" style="display:none; text-align:center; padding:40px 20px; color:var(--text-muted); font-size:14px;">
+            📭 Nenhuma espécie importada ainda. Vá para a aba <strong>📥 Importar Espécies</strong>, processe sua lista e volte aqui.
+        </div>
+
+        <div id="foodchain-stats-row" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:22px;"></div>
+
+        <!-- Diagrama visual da pirâmide trófica -->
+        <div id="foodchain-diagram" style="margin-bottom:28px;"></div>
+
+        <!-- Tabela detalhada -->
+        <div class="table-container" id="foodchain-table-container">
+            <table id="foodchain-table">
+                <thead>
+                    <tr>
+                        <th>Nível Trófico</th>
+                        <th>Espécie</th>
+                        <th>Nome Popular</th>
+                        <th>Guilda Alimentar</th>
+                        <th>Dieta / Estratégia</th>
+                    </tr>
+                </thead>
+                <tbody id="foodchain-table-body"></tbody>
+            </table>
+        </div>
+
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button id="foodchain-export-csv" class="export-btn">⬇️ Exportar CSV</button>
+            <button id="foodchain-copy" class="export-btn">📋 Copiar Tabela</button>
+        </div>
+
+        <div style="margin-top:24px; font-size:12px; color:var(--text-muted); border-top:1px solid var(--border-light); padding-top:12px; line-height:1.7;">
+            <strong>Referências:</strong> Lindeman, R.L. (1942). The trophic-dynamic aspect of ecology. <em>Ecology</em>, 23(4), 399–417 ·
+            Sick, H. (1997). <em>Ornitologia Brasileira</em>. Editora Nova Fronteira ·
+            Wilman, H. et al. (2014). EltonTraits 1.0: Species-level foraging attributes of the world's birds and mammals. <em>Ecology</em>, 95(7), 2027 ·
+            Sigrist, T. (2014). <em>Avifauna Brasileira: Guia de Campo Avis Brasilis</em>.
         </div>
     </div>
 </section>
