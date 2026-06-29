@@ -3340,6 +3340,47 @@ function escapeHtml(str) {
 // ══════════════════════════════════════════════════════════════
 (function() {
 
+    // ── Helpers genéricos para capturar QUALQUER análise já executada na tela ──
+    function _txt(id) {
+        const el = document.getElementById(id);
+        if (!el) return '';
+        return (el.innerText || el.textContent || '').replace(/\s+\n/g, '\n').trim();
+    }
+
+    function _tableLines(elId, maxRows) {
+        const root = document.getElementById(elId);
+        if (!root) return [];
+        const table = root.tagName === 'TABLE' ? root : (root.tagName === 'TBODY' ? root.closest('table') : root.querySelector('table'));
+        if (!table) return [];
+        const headRow = table.querySelector('thead tr');
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        if (!bodyRows.length) return [];
+        const out = [];
+        if (headRow) {
+            const heads = Array.from(headRow.querySelectorAll('th')).map(th => th.textContent.replace(/[↕↑↓]/g,'').trim());
+            out.push('  ' + heads.join(' | '));
+            out.push('  ' + heads.map(() => '---').join(' | '));
+        }
+        bodyRows.slice(0, maxRows || 200).forEach(tr => {
+            const cells = Array.from(tr.querySelectorAll('td,th')).map(td => td.textContent.trim());
+            out.push('  ' + cells.join(' | '));
+        });
+        if (bodyRows.length > (maxRows || 200)) out.push('  ... (+' + (bodyRows.length - (maxRows||200)) + ' linha(s) adicionais — veja a aba correspondente)');
+        return out;
+    }
+
+    function _addSection(linhas, numero, titulo, conteudoFn) {
+        linhas.push('───────────────────────────────────────────────────────────');
+        linhas.push('  ' + numero + '. ' + titulo.toUpperCase());
+        linhas.push('───────────────────────────────────────────────────────────');
+        const antes = linhas.length;
+        try { conteudoFn(linhas); } catch(e) { /* ignora erro de análise específica */ }
+        if (linhas.length === antes) {
+            linhas.push('  Esta análise ainda não foi executada nesta sessão (sem dados gerados na aba correspondente).');
+        }
+        linhas.push('');
+    }
+
     function gerarRelatorio() {
         const linhas = [];
         const agora  = new Date();
@@ -3669,6 +3710,128 @@ function escapeHtml(str) {
                 }
             }
         }
+
+        // ── 7. CADEIA ALIMENTAR ────────────────────────────────────────────
+        _addSection(linhas, 7, 'Cadeia Alimentar', function(linhas) {
+            const stats = _txt('foodchain-stats-row');
+            if (stats) { linhas.push('  ' + stats.replace(/\n+/g, ' | ')); linhas.push(''); }
+            _tableLines('foodchain-table-container').forEach(l => linhas.push(l));
+        });
+
+        // ── 8. DESCRITORES TAXONÔMICOS ─────────────────────────────────────
+        _addSection(linhas, 8, 'Descritores Taxonômicos (Autoria)', function(linhas) {
+            const stats = _txt('desc-stats-row');
+            if (stats) { linhas.push('  ' + stats.replace(/\n+/g, ' | ')); linhas.push(''); }
+            _tableLines('desc-table-container').forEach(l => linhas.push(l));
+        });
+
+        // ── 9. DISTRIBUIÇÃO TAXONÔMICA (Ordens/Famílias) ──────────────────
+        _addSection(linhas, 9, 'Distribuição Taxonômica (Ordens e Famílias)', function(linhas) {
+            if (speciesSet.size === 0) return;
+            const ordemCount = {}, familiaCount = {};
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const d = {};
+                inputs.forEach(inp => { if (inp.dataset.field) d[inp.dataset.field] = inp.value.trim(); });
+                if (d.ordem && d.ordem !== 'Não informado') ordemCount[d.ordem] = (ordemCount[d.ordem]||0)+1;
+                if (d.familia && d.familia !== 'Não informado') familiaCount[d.familia] = (familiaCount[d.familia]||0)+1;
+            });
+            if (Object.keys(ordemCount).length) {
+                linhas.push('  Por Ordem:');
+                Object.entries(ordemCount).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => linhas.push('    • ' + k + ': ' + v + ' espécie(s)'));
+                linhas.push('');
+            }
+            if (Object.keys(familiaCount).length) {
+                linhas.push('  Por Família:');
+                Object.entries(familiaCount).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => linhas.push('    • ' + k + ': ' + v + ' espécie(s)'));
+            }
+        });
+
+        // ── 10. MAPA DE OCORRÊNCIAS ────────────────────────────────────────
+        _addSection(linhas, 10, 'Mapa de Ocorrências', function(linhas) {
+            linhas.push('  Visualização espacial interativa disponível na aba 🗺️ Mapa.');
+            linhas.push('  (Mapas interativos não são incluídos no relatório em texto — consulte o PDF Acadêmico para uma imagem estática do mapa.)');
+        });
+
+        // ── 11. COMPARAR LISTAS ────────────────────────────────────────────
+        _addSection(linhas, 11, 'Comparar Listas', function(linhas) {
+            const txt = _txt('compare-results') || _txt('compare-section');
+            if (txt) linhas.push('  ' + txt.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 12. ESPÉCIES INDICADORAS ───────────────────────────────────────
+        _addSection(linhas, 12, 'Espécies Indicadoras', function(linhas) {
+            _tableLines('indicadoras-results').forEach(l => linhas.push(l));
+            const an = _txt('indicadoras-analysis');
+            if (an) { linhas.push(''); linhas.push('  ' + an.replace(/\n+/g, '\n  ')); }
+        });
+
+        // ── 13. CLUSTER HIERÁRQUICO ────────────────────────────────────────
+        _addSection(linhas, 13, 'Análise de Cluster (Similaridade entre Amostras)', function(linhas) {
+            _tableLines('cluster-matrix-wrap').forEach(l => linhas.push(l));
+        });
+
+        // ── 14. DARWIN CORE ────────────────────────────────────────────────
+        _addSection(linhas, 14, 'Darwin Core (Padronização de Dados)', function(linhas) {
+            _tableLines('darwincore-result').forEach(l => linhas.push(l));
+        });
+
+        // ── 15. PICOS DE HORÁRIOS ──────────────────────────────────────────
+        _addSection(linhas, 15, 'Picos de Horários de Atividade', function(linhas) {
+            const an = _txt('picos-stats');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 16. CÁLCULO DE ESFORÇO DE AVISTAMENTOS ─────────────────────────
+        _addSection(linhas, 16, 'Cálculo de Esforço de Avistamentos', function(linhas) {
+            _tableLines('calculo-table-body').forEach(l => linhas.push(l));
+        });
+
+        // ── 17. RAREFAÇÃO DE RIQUEZA ───────────────────────────────────────
+        _addSection(linhas, 17, 'Rarefação de Riqueza', function(linhas) {
+            const an = _txt('raref-stats');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 18. SAZONALIDADE ───────────────────────────────────────────────
+        _addSection(linhas, 18, 'Sazonalidade das Espécies', function(linhas) {
+            const an = _txt('sazon-stats');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 19. FENOLOGIA ──────────────────────────────────────────────────
+        _addSection(linhas, 19, 'Fenologia (Período de Atividade por Espécie)', function(linhas) {
+            _tableLines('fenol-table-wrap').forEach(l => linhas.push(l));
+            const an = _txt('fenol-analysis');
+            if (an) { linhas.push(''); linhas.push('  ' + an.replace(/\n+/g, '\n  ')); }
+        });
+
+        // ── 20. TURNOVER TEMPORAL ──────────────────────────────────────────
+        _addSection(linhas, 20, 'Turnover Temporal de Comunidades', function(linhas) {
+            _tableLines('turnover-results').forEach(l => linhas.push(l));
+            const an = _txt('turnover-summary');
+            if (an) { linhas.push(''); linhas.push('  ' + an.replace(/\n+/g, '\n  ')); }
+        });
+
+        // ── 21. RANK-ABUNDÂNCIA ────────────────────────────────────────────
+        _addSection(linhas, 21, 'Rank-Abundância (Whittaker Plot)', function(linhas) {
+            const an = _txt('rankabund-analysis');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 22. CO-OCORRÊNCIA ──────────────────────────────────────────────
+        _addSection(linhas, 22, 'Matriz de Co-ocorrência de Espécies', function(linhas) {
+            const pares = _txt('cooc-top-pairs');
+            if (pares) { linhas.push('  Pares mais frequentes:'); linhas.push('  ' + pares.replace(/\n+/g, '\n  ')); linhas.push(''); }
+            const an = _txt('cooc-matrix-analysis');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
+
+        // ── 23. CURVAS DE ACUMULAÇÃO / COLETOR ─────────────────────────────
+        _addSection(linhas, 23, 'Curvas de Acumulação / Coletor', function(linhas) {
+            const an = _txt('curve-stats');
+            if (an) linhas.push('  ' + an.replace(/\n+/g, '\n  '));
+        });
 
         linhas.push('═══════════════════════════════════════════════════════════');
         linhas.push('  Relatório gerado por Ornitologia Avançada de SC');
