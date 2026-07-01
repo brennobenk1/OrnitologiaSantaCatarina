@@ -6714,37 +6714,147 @@ function handleDropOnMap(e) {
     }
 }
 
-function handleShapefileUpload(event) {
-    const files = event.target.files;
+// Acumula as features de um resultado geojson/GeoJSON no array `out`
+function _collectSpatialFeatures(geojson, out) {
+    if (!geojson) return;
+    let features = [];
+    if (Array.isArray(geojson)) {
+        // shpjs pode retornar um array de FeatureCollections (um por camada/dbf)
+        geojson.forEach(fc => { if (fc && fc.features) features = features.concat(fc.features); });
+    } else if (geojson.type === 'FeatureCollection') {
+        features = geojson.features || [];
+    } else if (geojson.type === 'Feature') {
+        features = [geojson];
+    } else if (geojson.type === 'GeometryCollection') {
+        features = (geojson.geometries || []).map(g => ({ type: 'Feature', properties: {}, geometry: g }));
+    }
+    out.push(...features);
+}
+
+// Agrupa arquivos soltos (.shp/.dbf/.shx/.prj/.cpg) pelo nome-base, para reconstruir
+// cada shapefile antes de zipá-lo em memória e passar para o shpjs.
+function _groupShapefileComponents(files) {
+    const groups = {};
+    files.forEach(f => {
+        const base = f.name.replace(/\.[^.]+$/, '');
+        (groups[base] = groups[base] || []).push(f);
+    });
+    return groups;
+}
+
+async function handleShapefileUpload(event) {
+    const inputEl = event.target;
+    const files = Array.from(inputEl.files || []);
     if (files.length === 0) return;
-    
-    const file = files[0];
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const arrayBuffer = e.target.result;
-        shp(arrayBuffer).then(function(geojson) {
-            let features = [];
-            if (Array.isArray(geojson)) {
-                geojson.forEach(fc => features = features.concat(fc.features));
-            } else {
-                features = geojson.features;
+
+    const zipFiles       = files.filter(f => /\.zip$/i.test(f.name));
+    const kmlFiles        = files.filter(f => /\.kml$/i.test(f.name));
+    const gpkgFiles       = files.filter(f => /\.gpkg$/i.test(f.name));
+    const shpComponents   = files.filter(f => /\.(shp|dbf|shx|prj|cpg)$/i.test(f.name));
+
+    const allFeatures = [];
+    const erros = [];
+
+    try {
+        // ── ZIP contendo shapefile ────────────────────────────────────
+        for (const f of zipFiles) {
+            try {
+                const buf = await f.arrayBuffer();
+                const geojson = await shp(buf);
+                _collectSpatialFeatures(geojson, allFeatures);
+            } catch (err) {
+                erros.push(`${f.name}: ${err.message}`);
             }
-            
-            features.forEach(feature => {
-                if (feature.geometry.type.includes('Polygon')) {
+        }
+
+        // ── .shp solto (+ .dbf/.shx/.prj/.cpg quando presentes) ───────
+        if (shpComponents.length > 0) {
+            const groups = _groupShapefileComponents(shpComponents);
+            for (const base in groups) {
+                const group = groups[base];
+                if (!group.some(f => /\.shp$/i.test(f.name))) continue; // precisa do .shp
+                try {
+                    const zip = new JSZip();
+                    for (const f of group) {
+                        zip.file(f.name, await f.arrayBuffer());
+                    }
+                    const zipBuf = await zip.generateAsync({ type: 'arraybuffer' });
+                    const geojson = await shp(zipBuf);
+                    _collectSpatialFeatures(geojson, allFeatures);
+                } catch (err) {
+                    erros.push(`${base}: ${err.message}`);
+                }
+            }
+        }
+
+        // ── KML ─────────────────────────────────────────────────────
+        for (const f of kmlFiles) {
+            try {
+                const text = await f.text();
+                const xml = new DOMParser().parseFromString(text, 'text/xml');
+                const geojson = toGeoJSON.kml(xml);
+                _collectSpatialFeatures(geojson, allFeatures);
+            } catch (err) {
+                erros.push(`${f.name}: ${err.message}`);
+            }
+        }
+
+        // ── GeoPackage (.gpkg) ──────────────────────────────────────
+        for (const f of gpkgFiles) {
+            try {
+                const buf = await f.arrayBuffer();
+                const array = new Uint8Array(buf);
+                const { GeoPackageAPI, setSqljsWasmLocateFile } = window.GeoPackage;
+                setSqljsWasmLocateFile(file => 'https://unpkg.com/@ngageoint/geopackage@4.2.4/dist/' + file);
+                const geoPackage = await GeoPackageAPI.open(array);
+                const featureTables = geoPackage.getFeatureTables();
+                featureTables.forEach(table => {
+                    const featureDao = geoPackage.getFeatureDao(table);
+                    const iterator = featureDao.queryForEach();
+                    for (const row of iterator) {
+                        const featureRow = featureDao.getRow(row);
+                        const geometry = featureRow.geometry;
+                        if (geometry && geometry.geometry) {
+                            allFeatures.push({
+                                type: 'Feature',
+                                properties: {},
+                                geometry: geometry.geometry.toGeoJSON()
+                            });
+                        }
+                    }
+                });
+            } catch (err) {
+                erros.push(`${f.name}: ${err.message}`);
+            }
+        }
+
+        // ── Adiciona polígonos/multipolígonos encontrados ao mapa ─────
+        let adicionados = 0;
+        allFeatures.forEach(feature => {
+            if (feature && feature.geometry && feature.geometry.type && feature.geometry.type.includes('Polygon')) {
+                try {
                     const layer = L.geoJSON(feature).getLayers()[0];
                     drawnItems.addLayer(layer);
+                    adicionados++;
+                } catch (err) {
+                    console.warn('Geometria inválida ignorada:', err);
                 }
-            });
-            
-            if (drawnItems.getLayers().length > 0) {
-                map.fitBounds(drawnItems.getBounds());
             }
-        }).catch(err => {
-            alert('Erro ao ler shapefile: ' + err.message);
         });
-    };
-    reader.readAsArrayBuffer(file);
+
+        if (adicionados > 0 && drawnItems.getLayers().length > 0) {
+            map.fitBounds(drawnItems.getBounds());
+        }
+
+        if (adicionados === 0 && erros.length === 0) {
+            alert('Nenhum polígono foi encontrado nos arquivos selecionados.');
+        }
+        if (erros.length > 0) {
+            alert('Alguns arquivos não puderam ser lidos:\n' + erros.join('\n'));
+        }
+    } finally {
+        inputEl.value = ''; // permite reimportar o(s) mesmo(s) arquivo(s)
+    }
 }
 
 function calculateSpeciesInPolygons() {
