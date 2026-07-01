@@ -32,6 +32,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/shpjs@4.0.4/dist/shp.js"></script>
+    <script src="https://unpkg.com/@mapbox/togeojson@0.16.0/togeojson.js"></script>
+    <script src="https://unpkg.com/@ngageoint/geopackage@4.2.4/dist/geopackage.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <!-- shp-write removido: exportação implementada manualmente com JSZip -->
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
@@ -578,8 +580,8 @@
                     <button id="draw-polygon" class="sources-btn">🔷 Desenhar área</button>
                     <button id="add-all-to-polygon" class="generate-btn" style="background:#4c8b4c;">➕ Adicionar todas</button>
                     <button id="clear-drawings" class="delete-btn">🗑️ Limpar desenhos</button>
-                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile (ZIP / .shp)</label>
-                    <input type="file" id="shapefile-upload" accept=".zip,.shp,.dbf,.prj,.shx" multiple style="display:none;">
+                    <label for="shapefile-upload" class="import-btn" style="padding:10px 20px; cursor:pointer; background:#8e6b3c;">📁 Carregar Shapefile / KML / GeoPackage</label>
+                    <input type="file" id="shapefile-upload" accept=".zip,.shp,.dbf,.prj,.shx,.cpg,.kml,.gpkg" multiple style="display:none;">
                     <button id="calculate-species" class="generate-btn" style="background:#8e6b3c;">🔢 Calcular espécies nas áreas</button>
                     <button id="edit-mode-btn" class="sources-btn">✏️ Edição de ponto</button>
                     <button id="edit-area-btn" class="sources-btn">✏️ Editar área (OFF)</button>
@@ -1760,7 +1762,7 @@
             <li>🖱️ <strong>Arrastar espécies:</strong> arraste o nome de uma espécie do painel lateral para colocá-la no mapa. Um marcador é criado no local.</li>
             <li>👁️ <strong>Visibilidade:</strong> o botão olho ao lado de cada espécie mostra/oculta seus pontos no mapa sem apagar os dados.</li>
             <li>🔷 <strong>Desenhar área:</strong> crie polígonos para delimitar sua área de estudo. Clique em "Calcular" para contar quantas espécies estão dentro de cada polígono.</li>
-            <li>📁 <strong>Shapefile:</strong> importe arquivos .zip com shapefiles para sobrepor ao mapa (ex: unidades de conservação, municípios).</li>
+            <li>📁 <strong>Shapefile / KML / GeoPackage:</strong> importe arquivos .zip, .shp (+ .dbf/.shx/.prj), .kml ou .gpkg para sobrepor polígonos ao mapa (ex: unidades de conservação, municípios). Você pode selecionar vários arquivos de uma vez.</li>
             <li>🌍 <strong>GBIF / 🐦 eBird:</strong> busca automática de até 2.000 registros georreferenciados por espécie nos maiores bancos de dados de biodiversidade do mundo. <em>Requer conexão com internet.</em></li>
         </ul>
 
