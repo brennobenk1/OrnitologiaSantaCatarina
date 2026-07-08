@@ -9989,12 +9989,12 @@ function computeEstimatorsFromIncidence(incidence) {
         }
         jack2.push(jack2Val);
 
-        // Bootstrap
+        // Bootstrap (Smith & van Belle, 1984): S_boot = S_obs + Σ (1-p_i)^k
         let bootVal = sObs;
         freq.forEach(f => {
             const p = f / k;
             if (p > 0 && p < 1) {
-                bootVal += (1 - p) - (1 - p) ** k;
+                bootVal += (1 - p) ** k;
             }
         });
         boot.push(bootVal);
@@ -10066,11 +10066,12 @@ function computeEstimators(incidence) {
 
         // Bootstrap (riqueza esperada em k amostras)
         // p_j = proporção de amostras em que a espécie j ocorre nas k amostras
+        // Smith & van Belle (1984): S_boot = S_obs + Σ (1-p_j)^k
         let bootVal = sObs;
         freq.forEach(f => {
             const p = f / k;
             if (p > 0 && p < 1) {
-                bootVal += (1 - p) - (1 - p) ** k;
+                bootVal += (1 - p) ** k;
             }
         });
         boot.push(bootVal);
