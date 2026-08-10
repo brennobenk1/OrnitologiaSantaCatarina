@@ -1379,82 +1379,538 @@ function findBirdByNormalizedName(input) {
             };
             const ordem = ordemMap[genus] || "Passeriformes";
             const familia = familiaMap[genus] || "Desconhecida";
-            // Para subfamília, podemos tentar inferir de nomes conhecidos
-            let subfamilia = "";
-            if (familia === "Accipitridae") {
-                if (genus === "Elanus") subfamilia = "Elaninae";
-                else if (["Chondrohierax", "Leptodon", "Elanoides"].includes(genus)) subfamilia = "Gypaetinae";
-                else if (["Spizaetus", "Rostrhamus", "Harpagus", "Ictinia", "Circus", "Hieraspiza", "Accipiter", "Geranospiza", "Heterospizias", "Amadonastur", "Urubitinga", "Rupornis", "Parabuteo", "Geranoaetus", "Pseudastur", "Buteo"].includes(genus)) subfamilia = "Accipitrinae";
-            } else if (familia === "Anatidae") {
-                if (genus === "Dendrocygna") subfamilia = "Dendrocygninae";
-                else if (genus === "Coscoroba") subfamilia = "Anserinae";
-                else subfamilia = "Anatinae";
-            } else if (familia === "Cuculidae") {
-                if (genus === "Guira" || genus === "Crotophaga") subfamilia = "Crotophaginae";
-                else if (genus === "Tapera" || genus === "Dromococcyx") subfamilia = "Taperinae";
-                else if (genus === "Neomorphus") subfamilia = "Neomorphinae";
-                else subfamilia = "Cuculinae";
-            } else if (familia === "Falconidae") {
-                if (genus === "Herpetotheres" || genus === "Micrastur") subfamilia = "Herpetotherinae";
-                else if (genus === "Caracara" || genus === "Milvago") subfamilia = "Caracarinae";
-                else if (genus === "Falco") subfamilia = "Falconinae";
-            } else if (familia === "Psittacidae") {
-                subfamilia = "Arinae";
-            } else if (familia === "Thamnophilidae") {
-                if (genus === "Terenura") subfamilia = "Euchrepomidinae";
-                else subfamilia = "Thamnophilinae";
-            } else if (familia === "Rhinocryptidae") {
-                if (genus === "Psilorhamphus" || genus === "Merulaxis") subfamilia = "Rhinocryptinae";
-                else if (genus === "Eleoscytalopus" || genus === "Scytalopus") subfamilia = "Scytalopodinae";
-            } else if (familia === "Dendrocolaptidae") {
-                if (genus === "Sittasomus" || genus === "Dendrocincla") subfamilia = "Sittasominae";
-                else subfamilia = "Dendrocolaptinae";
-            } else if (familia === "Furnariidae") {
-                if (genus === "Furnarius" || genus === "Lochmias" || genus === "Phleocryptes" || genus === "Limnornis" || genus === "Cinclodes") subfamilia = "Furnariinae";
-                else if (genus === "Anabazenops" || genus === "Cichlocolaptes" || genus === "Heliobletus" || genus === "Philydor" || genus === "Anabacerthia" || genus === "Syndactyla" || genus === "Dendroma" || genus === "Clibanornis" || genus === "Automolus") subfamilia = "Philydorinae";
-                else if (genus === "Leptasthenura" || genus === "Phacellodomus" || genus === "Anumbius" || genus === "Limnoctites" || genus === "Cranioleuca" || genus === "Spartonoica" || genus === "Certhiaxis" || genus === "Schoeniophylax" || genus === "Synallaxis") subfamilia = "Synallaxiinae";
-            } else if (familia === "Pipridae") {
-                if (genus === "Ilicura") subfamilia = "Ilicurinae";
-                else if (genus === "Chiroxiphia" || genus === "Manacus") subfamilia = "Piprinae";
-            } else if (familia === "Cotingidae") {
-                if (genus === "Carpornis") subfamilia = "Rupicolinae";
-                else if (genus === "Pyroderus" || genus === "Lipaugus") subfamilia = "Cephalopterinae";
-                else if (genus === "Procnias" || genus === "Phibalura" || genus === "Cotinga") subfamilia = "Cotinginae";
-            } else if (familia === "Tityridae") {
-                if (genus === "Schiffornis") subfamilia = "Schiffornithinae";
-                else if (genus === "Tityra" || genus === "Pachyramphus") subfamilia = "Tityrinae";
-            } else if (familia === "Rhynchocyclidae") {
-                if (genus === "Mionectes" || genus === "Leptopogon" || genus === "Corythopis") subfamilia = "Pipromorphinae";
-                else if (genus === "Phylloscartes" || genus === "Tolmomyias") subfamilia = "Rhynchocyclinae";
-                else if (genus === "Todirostrum" || genus === "Poecilotriccus" || genus === "Myiornis" || genus === "Hemitriccus") subfamilia = "Todirostrinae";
-            } else if (familia === "Tyrannidae") {
-                if (genus === "Hirundinea") subfamilia = "Hirundineinae";
-                else if (["Euscarthmus", "Tyranniscus", "Camptostoma", "Elaenia", "Myiopagis", "Capsiempis", "Phyllomyias", "Culicivora", "Polystictus", "Pseudocolopteryx", "Serpophaga"].includes(genus)) subfamilia = "Elaeniinae";
-                else if (["Attila", "Legatus", "Ramphotrigon", "Myiarchus", "Sirystes", "Pitangus", "Machetornis", "Myiodynastes", "Megarynchus", "Myiozetetes", "Tyrannus", "Griseotyrannus", "Empidonomus", "Conopias"].includes(genus)) subfamilia = "Tyranninae";
-                else if (["Colonia", "Arundinicola", "Fluvicola", "Pyrocephalus", "Muscipipra", "Gubernetes", "Heteroxolmis", "Myiophobus", "Cnemotriccus", "Lathrotriccus", "Contopus", "Satrapa", "Lessonia", "Hymenops", "Knipolegus", "Xolmis", "Nengetus"].includes(genus)) subfamilia = "Fluvicolinae";
-            } else if (familia === "Fringillidae") {
-                if (genus === "Spinus") subfamilia = "Carduelinae";
-                else if (genus === "Cyanophonia" || genus === "Chlorophonia" || genus === "Euphonia") subfamilia = "Euphoniinae";
-            } else if (familia === "Icteridae") {
-                if (genus === "Leistes") subfamilia = "Sturnellinae";
-                else if (genus === "Cacicus" || genus === "Psarocolius") subfamilia = "Cacicinae";
-                else if (genus === "Icterus") subfamilia = "Icterinae";
-                else if (["Molothrus", "Amblyramphus", "Gnorimopsar", "Agelaioides", "Agelasticus", "Chrysomus", "Xanthopsar", "Pseudoleistes"].includes(genus)) subfamilia = "Agelaiinae";
-            } else if (familia === "Thraupidae") {
-                if (genus === "Orchesticus") subfamilia = "Orchesticinae";
-                else if (genus === "Nemosia") subfamilia = "Nemosiinae";
-                else if (genus === "Embernagra" || genus === "Emberizoides") subfamilia = "Emberizoidinae";
-                else if (genus === "Rhopospina") subfamilia = "Porphyrospizinae";
-                else if (genus === "Hemithraupis") subfamilia = "Hemithraupinae";
-                else if (["Tersina", "Cyanerpes", "Dacnis"].includes(genus)) subfamilia = "Dacninae";
-                else if (genus === "Saltator") subfamilia = "Saltatorinae";
-                else if (genus === "Coereba" || genus === "Asemospiza") subfamilia = "Coerebinae";
-                else if (["Volatinia", "Trichothraupis", "Loriotus", "Coryphospingus", "Tachyphonus", "Ramphocelus"].includes(genus)) subfamilia = "Tachyphoninae";
-                else if (genus === "Sporophila") subfamilia = "Sporophilinae";
-                else if (["Poospiza", "Thlypopsis", "Castanozoster", "Donacospiza", "Microspingus"].includes(genus)) subfamilia = "Poospizinae";
-                else if (["Conirostrum", "Sicalis", "Haplospiza"].includes(genus)) subfamilia = "Diglossinae";
-                else if (["Pipraeidea", "Rauenia", "Stephanophorus", "Cissopis", "Schistochlamys", "Paroaria", "Thraupis", "Stilpnia", "Tangara", "Chlorophanes"].includes(genus)) subfamilia = "Thraupinae";
-            }
+            // ==================== SUBFAMÍLIAS ====================
+            // Mapa genero -> subfamilia. String vazia = família sem subfamílias
+            // reconhecidas ou representada por uma só subfamília (decisão deliberada,
+            // não lacuna). Substitui o antigo encadeamento de if/else.
+            const subfamiliaMap = {
+                // --- Rheidae ---
+                "Rhea": "",
+                // --- Tinamidae ---
+                "Crypturellus": "Tinaminae",
+                "Nothura": "Nothurinae",
+                "Rhynchotus": "Nothurinae",
+                "Tinamus": "Tinaminae",
+                // --- Anhimidae ---
+                "Anhima": "",
+                "Chauna": "",
+                // --- Anatidae ---
+                "Amazonetta": "Anatinae",
+                "Anas": "Anatinae",
+                "Cairina": "Anatinae",
+                "Callonetta": "Anatinae",
+                "Coscoroba": "Anserinae",
+                "Dendrocygna": "Dendrocygninae",
+                "Heteronetta": "Oxyurinae",
+                "Mareca": "Anatinae",
+                "Netta": "Anatinae",
+                "Nomonyx": "Oxyurinae",
+                "Oxyura": "Oxyurinae",
+                "Sarkidiornis": "Anatinae",
+                "Spatula": "Anatinae",
+                // --- Cracidae ---
+                "Aburria": "Penelopinae",
+                "Ortalis": "Penelopinae",
+                "Penelope": "Penelopinae",
+                // --- Odontophoridae ---
+                "Odontophorus": "Odontophorinae",
+                // --- Phoenicopteridae ---
+                "Phoenicoparrus": "",
+                // --- Podicipedidae ---
+                "Podicephorus": "",
+                "Podilymbus": "",
+                "Rollandia": "",
+                "Tachybaptus": "",
+                // --- Columbidae ---
+                "Claravis": "Claravinae",
+                "Columba": "Columbinae",
+                "Columbina": "Claravinae",
+                "Geotrygon": "Columbinae",
+                "Leptotila": "Columbinae",
+                "Patagioenas": "Columbinae",
+                "Zenaida": "Columbinae",
+                // --- Cuculidae ---
+                "Coccyzus": "Coccyzinae",
+                "Crotophaga": "Crotophaginae",
+                "Dromococcyx": "Taperinae",
+                "Guira": "Crotophaginae",
+                "Micrococcyx": "Coccyzinae",
+                "Piaya": "Coccyzinae",
+                "Tapera": "Taperinae",
+                // --- Nyctibiidae ---
+                "Nyctibius": "",
+                // --- Caprimulgidae ---
+                "Antrostomus": "Caprimulginae",
+                "Chordeiles": "Chordeilinae",
+                "Hydropsalis": "Caprimulginae",
+                "Lurocalis": "Chordeilinae",
+                "Nyctidromus": "Caprimulginae",
+                "Podager": "Chordeilinae",
+                // --- Apodidae ---
+                "Chaetura": "Apodinae",
+                "Cypseloides": "Cypseloidinae",
+                "Panyptila": "Apodinae",
+                "Streptoprocne": "Cypseloidinae",
+                // --- Trochilidae ---
+                "Anthracothorax": "Polytminae",
+                "Aphantochroa": "Trochilinae",
+                "Calliphlox": "Lesbiinae",
+                "Chionomesa": "Trochilinae",
+                "Chlorostilbon": "Trochilinae",
+                "Chrysuronia": "Trochilinae",
+                "Colibri": "Polytminae",
+                "Eupetomena": "Trochilinae",
+                "Florisuga": "Florisuginae",
+                "Heliodoxa": "Lesbiinae",
+                "Heliomaster": "Lesbiinae",
+                "Hylocharis": "Trochilinae",
+                "Leucochloris": "Trochilinae",
+                "Lophornis": "Trochilinae",
+                "Phaethornis": "Phaethornithinae",
+                "Ramphodon": "Phaethornithinae",
+                "Stephanoxis": "Trochilinae",
+                "Thalurania": "Trochilinae",
+                // --- Aramidae ---
+                "Aramus": "",
+                // --- Rallidae ---
+                "Amaurolimnas": "Rallinae",
+                "Aramides": "Rallinae",
+                "Fulica": "Gallinulinae",
+                "Gallinula": "Gallinulinae",
+                "Laterallus": "Rallinae",
+                "Mustelirallus": "Rallinae",
+                "Neocrex": "Rallinae",
+                "Pardirallus": "Rallinae",
+                "Porphyrio": "Gallinulinae",
+                "Porphyriops": "Gallinulinae",
+                "Rallus": "Rallinae",
+                // --- Heliornithidae ---
+                "Heliornis": "",
+                // --- Charadriidae ---
+                "Charadrius": "Charadriinae",
+                "Oreopholus": "Charadriinae",
+                "Pluvialis": "Charadriinae",
+                "Vanellus": "Vanellinae",
+                // --- Haematopodidae ---
+                "Haematopus": "",
+                // --- Recurvirostridae ---
+                "Himantopus": "",
+                // --- Chionidae ---
+                "Chionis": "",
+                // --- Scolopacidae ---
+                "Actitis": "Tringinae",
+                "Arenaria": "Arenariinae",
+                "Bartramia": "Numeniinae",
+                "Calidris": "Calidridinae",
+                "Gallinago": "Scolopacinae",
+                "Limnodromus": "Scolopacinae",
+                "Limosa": "Limosinae",
+                "Numenius": "Numeniinae",
+                "Phalaropus": "Phalaropodinae",
+                "Tringa": "Tringinae",
+                // --- Thinocoridae ---
+                "Thinocorus": "",
+                // --- Jacanidae ---
+                "Jacana": "",
+                // --- Rostratulidae ---
+                "Nycticryphes": "",
+                // --- Stercorariidae ---
+                "Stercorarius": "",
+                // --- Laridae ---
+                "Anous": "Anoinae",
+                "Chroicocephalus": "Larinae",
+                "Larus": "Larinae",
+                "Leucophaeus": "Larinae",
+                "Phaetusa": "Sterninae",
+                "Rynchops": "Rynchopinae",
+                "Sterna": "Sterninae",
+                "Sternula": "Sterninae",
+                "Thalasseus": "Sterninae",
+                // --- Spheniscidae ---
+                "Spheniscus": "",
+                // --- Diomedeidae ---
+                "Diomedea": "",
+                "Thalassarche": "",
+                // --- Oceanitidae ---
+                "Oceanites": "",
+                // --- Procellariidae ---
+                "Ardenna": "Puffininae",
+                "Calonectris": "Puffininae",
+                "Daption": "Fulmarinae",
+                "Fulmarus": "Fulmarinae",
+                "Macronectes": "Fulmarinae",
+                "Procellaria": "Puffininae",
+                "Pterodroma": "Pterodrominae",
+                "Puffinus": "Puffininae",
+                // --- Ciconiidae ---
+                "Ciconia": "",
+                "Jabiru": "",
+                "Mycteria": "",
+                // --- Fregatidae ---
+                "Fregata": "",
+                // --- Sulidae ---
+                "Morus": "",
+                "Sula": "",
+                // --- Anhingidae ---
+                "Anhinga": "",
+                // --- Phalacrocoracidae ---
+                "Nannopterum": "",
+                // --- Ardeidae ---
+                "Ardea": "Ardeinae",
+                "Botaurus": "Botaurinae",
+                "Bubulcus": "Ardeinae",
+                "Butorides": "Ardeinae",
+                "Cochlearius": "Cochleariinae",
+                "Egretta": "Ardeinae",
+                "Ixobrychus": "Botaurinae",
+                "Nyctanassa": "Ardeinae",
+                "Nycticorax": "Ardeinae",
+                "Pilherodius": "Ardeinae",
+                "Syrigma": "Ardeinae",
+                "Tigrisoma": "Tigriornithinae",
+                // --- Threskiornithidae ---
+                "Eudocimus": "Threskiornithinae",
+                "Mesembrinibis": "Threskiornithinae",
+                "Phimosus": "Threskiornithinae",
+                "Platalea": "Plataleinae",
+                "Plegadis": "Threskiornithinae",
+                "Theristicus": "Threskiornithinae",
+                // --- Cathartidae ---
+                "Cathartes": "",
+                "Coragyps": "",
+                "Sarcoramphus": "",
+                // --- Pandionidae ---
+                "Pandion": "",
+                // --- Accipitridae ---
+                "Accipiter": "Accipitrinae",
+                "Amadonastur": "Buteoninae",
+                "Buteo": "Buteoninae",
+                "Chondrohierax": "Gypaetinae",
+                "Circus": "Accipitrinae",
+                "Elanoides": "Gypaetinae",
+                "Elanus": "Elaninae",
+                "Geranoaetus": "Buteoninae",
+                "Geranospiza": "Buteoninae",
+                "Harpagus": "Harpaginae",
+                "Heterospizias": "Buteoninae",
+                "Hieraspiza": "Harpaginae",
+                "Ictinia": "Milvinae",
+                "Leptodon": "Gypaetinae",
+                "Parabuteo": "Buteoninae",
+                "Pseudastur": "Buteoninae",
+                "Rostrhamus": "Milvinae",
+                "Rupornis": "Buteoninae",
+                "Spizaetus": "Aquilinae",
+                "Urubitinga": "Buteoninae",
+                // --- Tytonidae ---
+                "Tyto": "Tytoninae",
+                // --- Strigidae ---
+                "Aegolius": "Surniinae",
+                "Asio": "Striginae",
+                "Athene": "Surniinae",
+                "Bubo": "Striginae",
+                "Glaucidium": "Surniinae",
+                "Megascops": "Striginae",
+                "Pulsatrix": "Striginae",
+                "Strix": "Striginae",
+                // --- Trogonidae ---
+                "Trogon": "Trogoninae",
+                // --- Momotidae ---
+                "Baryphthengus": "",
+                // --- Alcedinidae ---
+                "Chloroceryle": "Cerylinae",
+                "Megaceryle": "Cerylinae",
+                // --- Bucconidae ---
+                "Malacoptila": "Bucconinae",
+                "Nonnula": "Bucconinae",
+                "Notharchus": "Bucconinae",
+                "Nystalus": "Bucconinae",
+                // --- Ramphastidae ---
+                "Pteroglossus": "",
+                "Ramphastos": "",
+                "Selenidera": "",
+                // --- Picidae ---
+                "Campephilus": "Picinae",
+                "Celeus": "Picinae",
+                "Colaptes": "Picinae",
+                "Dryocopus": "Picinae",
+                "Melanerpes": "Picinae",
+                "Piculus": "Picinae",
+                "Picumnus": "Picumninae",
+                "Veniliornis": "Picinae",
+                // --- Cariamidae ---
+                "Cariama": "",
+                // --- Falconidae ---
+                "Caracara": "Caracarinae",
+                "Falco": "Falconinae",
+                "Herpetotheres": "Herpetotherinae",
+                "Micrastur": "Herpetotherinae",
+                "Milvago": "Caracarinae",
+                // --- Psittacidae ---
+                "Amazona": "Arinae",
+                "Brotogeris": "Arinae",
+                "Forpus": "Arinae",
+                "Myiopsitta": "Arinae",
+                "Pionopsitta": "Arinae",
+                "Pionus": "Arinae",
+                "Primolius": "Arinae",
+                "Psittacara": "Arinae",
+                "Pyrrhura": "Arinae",
+                "Touit": "Arinae",
+                "Triclaria": "Arinae",
+                // --- Thamnophilidae ---
+                "Batara": "Thamnophilinae",
+                "Biatas": "Thamnophilinae",
+                "Drymophila": "Thamnophilinae",
+                "Dysithamnus": "Thamnophilinae",
+                "Formicivora": "Thamnophilinae",
+                "Herpsilochmus": "Thamnophilinae",
+                "Hypoedaleus": "Thamnophilinae",
+                "Mackenziaena": "Thamnophilinae",
+                "Myrmoderus": "Thamnophilinae",
+                "Myrmotherula": "Thamnophilinae",
+                "Pyriglena": "Thamnophilinae",
+                "Rhopias": "Thamnophilinae",
+                "Terenura": "Thamnophilinae",
+                "Thamnophilus": "Thamnophilinae",
+                // --- Conopophagidae ---
+                "Conopophaga": "",
+                // --- Grallariidae ---
+                "Cryptopezus": "",
+                "Grallaria": "",
+                // --- Rhinocryptidae ---
+                "Eleoscytalopus": "Scytalopodinae",
+                "Merulaxis": "Rhinocryptinae",
+                "Psilorhamphus": "Rhinocryptinae",
+                "Scytalopus": "Scytalopodinae",
+                // --- Formicariidae ---
+                "Chamaeza": "",
+                "Formicarius": "",
+                // --- Scleruridae ---
+                "Geositta": "Geosittinae",
+                "Sclerurus": "Sclerurinae",
+                // --- Dendrocolaptidae ---
+                "Campylorhamphus": "Dendrocolaptinae",
+                "Dendrocincla": "Sittasominae",
+                "Dendrocolaptes": "Dendrocolaptinae",
+                "Lepidocolaptes": "Dendrocolaptinae",
+                "Sittasomus": "Sittasominae",
+                "Xiphocolaptes": "Dendrocolaptinae",
+                "Xiphorhynchus": "Dendrocolaptinae",
+                // --- Xenopidae ---
+                "Xenops": "",
+                // --- Furnariidae ---
+                "Anabacerthia": "Philydorinae",
+                "Anabazenops": "Philydorinae",
+                "Anumbius": "Synallaxiinae",
+                "Automolus": "Philydorinae",
+                "Certhiaxis": "Synallaxiinae",
+                "Cichlocolaptes": "Philydorinae",
+                "Cinclodes": "Furnariinae",
+                "Clibanornis": "Philydorinae",
+                "Cranioleuca": "Synallaxiinae",
+                "Dendroma": "Philydorinae",
+                "Furnarius": "Furnariinae",
+                "Heliobletus": "Philydorinae",
+                "Leptasthenura": "Synallaxiinae",
+                "Limnoctites": "Synallaxiinae",
+                "Limnornis": "Furnariinae",
+                "Lochmias": "Furnariinae",
+                "Phacellodomus": "Synallaxiinae",
+                "Philydor": "Philydorinae",
+                "Phleocryptes": "Furnariinae",
+                "Schoeniophylax": "Synallaxiinae",
+                "Spartonoica": "Synallaxiinae",
+                "Synallaxis": "Synallaxiinae",
+                "Syndactyla": "Philydorinae",
+                // --- Pipridae ---
+                "Chiroxiphia": "Piprinae",
+                "Ilicura": "Ilicurinae",
+                "Manacus": "Piprinae",
+                // --- Cotingidae ---
+                "Carpornis": "Rupicolinae",
+                "Lipaugus": "Cephalopterinae",
+                "Phibalura": "Cotinginae",
+                "Procnias": "Cotinginae",
+                "Pyroderus": "Cephalopterinae",
+                // --- Tityridae ---
+                "Pachyramphus": "Tityrinae",
+                "Schiffornis": "Schiffornithinae",
+                "Tityra": "Tityrinae",
+                // --- Oxyruncidae ---
+                "Oxyruncus": "",
+                // --- Onychorhynchidae ---
+                "Myiobius": "",
+                "Onychorhynchus": "",
+                // --- Pipritidae ---
+                "Piprites": "",
+                // --- Platyrinchidae ---
+                "Platyrinchus": "",
+                // --- Tachurisidae ---
+                "Tachuris": "",
+                // --- Rhynchocyclidae ---
+                "Corythopis": "Pipromorphinae",
+                "Hemitriccus": "Todirostrinae",
+                "Leptopogon": "Pipromorphinae",
+                "Mionectes": "Pipromorphinae",
+                "Myiornis": "Todirostrinae",
+                "Phylloscartes": "Rhynchocyclinae",
+                "Poecilotriccus": "Todirostrinae",
+                "Todirostrum": "Todirostrinae",
+                "Tolmomyias": "Rhynchocyclinae",
+                // --- Tyrannidae ---
+                "Arundinicola": "Fluvicolinae",
+                "Attila": "Tyranninae",
+                "Camptostoma": "Elaeniinae",
+                "Capsiempis": "Elaeniinae",
+                "Cnemotriccus": "Fluvicolinae",
+                "Colonia": "Fluvicolinae",
+                "Conopias": "Tyranninae",
+                "Contopus": "Fluvicolinae",
+                "Culicivora": "Elaeniinae",
+                "Elaenia": "Elaeniinae",
+                "Empidonomus": "Tyranninae",
+                "Euscarthmus": "Elaeniinae",
+                "Fluvicola": "Fluvicolinae",
+                "Griseotyrannus": "Tyranninae",
+                "Gubernetes": "Fluvicolinae",
+                "Heteroxolmis": "Fluvicolinae",
+                "Hirundinea": "Hirundineinae",
+                "Hymenops": "Fluvicolinae",
+                "Knipolegus": "Fluvicolinae",
+                "Lathrotriccus": "Fluvicolinae",
+                "Legatus": "Tyranninae",
+                "Lessonia": "Fluvicolinae",
+                "Machetornis": "Tyranninae",
+                "Megarynchus": "Tyranninae",
+                "Muscipipra": "Fluvicolinae",
+                "Myiarchus": "Tyranninae",
+                "Myiodynastes": "Tyranninae",
+                "Myiopagis": "Elaeniinae",
+                "Myiophobus": "Fluvicolinae",
+                "Myiozetetes": "Tyranninae",
+                "Nengetus": "Fluvicolinae",
+                "Phyllomyias": "Elaeniinae",
+                "Pitangus": "Tyranninae",
+                "Polystictus": "Elaeniinae",
+                "Pseudocolopteryx": "Elaeniinae",
+                "Pyrocephalus": "Fluvicolinae",
+                "Ramphotrigon": "Tyranninae",
+                "Satrapa": "Fluvicolinae",
+                "Serpophaga": "Elaeniinae",
+                "Sirystes": "Tyranninae",
+                "Tyranniscus": "Elaeniinae",
+                "Tyrannus": "Tyranninae",
+                "Xolmis": "Fluvicolinae",
+                // --- Vireonidae ---
+                "Cyclarhis": "Cyclarhinae",
+                "Hylophilus": "Vireoninae",
+                "Vireo": "Vireoninae",
+                // --- Corvidae ---
+                "Cyanocorax": "Cyanocoracinae",
+                // --- Hirundinidae ---
+                "Alopochelidon": "Hirundininae",
+                "Hirundo": "Hirundininae",
+                "Petrochelidon": "Hirundininae",
+                "Progne": "Hirundininae",
+                "Pygochelidon": "Hirundininae",
+                "Riparia": "Hirundininae",
+                "Stelgidopteryx": "Hirundininae",
+                "Tachycineta": "Hirundininae",
+                // --- Troglodytidae ---
+                "Campylorhynchus": "",
+                "Cantorchilus": "",
+                "Cistothorus": "",
+                "Troglodytes": "",
+                // --- Polioptilidae ---
+                "Polioptila": "",
+                "Ramphocaenus": "",
+                // --- Turdidae ---
+                "Catharus": "Turdinae",
+                "Turdus": "Turdinae",
+                // --- Mimidae ---
+                "Mimus": "",
+                // --- Sturnidae ---
+                "Sturnus": "Sturninae",
+                // --- Estrildidae ---
+                "Estrilda": "Estrildinae",
+                // --- Passeridae ---
+                "Passer": "Passerinae",
+                // --- Motacillidae ---
+                "Anthus": "Motacillinae",
+                // --- Fringillidae ---
+                "Chlorophonia": "Euphoniinae",
+                "Cyanophonia": "Euphoniinae",
+                "Euphonia": "Euphoniinae",
+                "Serinus": "Carduelinae",
+                "Spinus": "Carduelinae",
+                // --- Passerellidae ---
+                "Ammodramus": "",
+                "Arremon": "",
+                "Zonotrichia": "",
+                // --- Icteridae ---
+                "Agelaioides": "Agelaiinae",
+                "Agelasticus": "Agelaiinae",
+                "Amblyramphus": "Agelaiinae",
+                "Cacicus": "Cacicinae",
+                "Chrysomus": "Agelaiinae",
+                "Gnorimopsar": "Agelaiinae",
+                "Icterus": "Icterinae",
+                "Leistes": "Sturnellinae",
+                "Molothrus": "Agelaiinae",
+                "Pseudoleistes": "Agelaiinae",
+                "Xanthopsar": "Agelaiinae",
+                // --- Parulidae ---
+                "Basileuterus": "",
+                "Geothlypis": "",
+                "Myiothlypis": "",
+                "Setophaga": "",
+                // --- Mitrospingidae ---
+                "Orthogonys": "",
+                // --- Cardinalidae ---
+                "Amaurospiza": "",
+                "Cyanoloxia": "",
+                "Habia": "",
+                "Piranga": "",
+                // --- Thraupidae ---
+                "Asemospiza": "Coerebinae",
+                "Castanozoster": "Poospizinae",
+                "Chlorophanes": "Dacninae",
+                "Cissopis": "Thraupinae",
+                "Coereba": "Coerebinae",
+                "Conirostrum": "Diglossinae",
+                "Cyanerpes": "Dacninae",
+                "Dacnis": "Dacninae",
+                "Donacospiza": "Poospizinae",
+                "Emberizoides": "Emberizoidinae",
+                "Embernagra": "Emberizoidinae",
+                "Haplospiza": "Diglossinae",
+                "Hemithraupis": "Hemithraupinae",
+                "Loriotus": "Tachyphoninae",
+                "Microspingus": "Poospizinae",
+                "Nemosia": "Nemosiinae",
+                "Orchesticus": "Orchesticinae",
+                "Paroaria": "Thraupinae",
+                "Pipraeidea": "Thraupinae",
+                "Poospiza": "Poospizinae",
+                "Ramphocelus": "Tachyphoninae",
+                "Rauenia": "Thraupinae",
+                "Rhopospina": "Porphyrospizinae",
+                "Saltator": "Saltatorinae",
+                "Schistochlamys": "Thraupinae",
+                "Sicalis": "Diglossinae",
+                "Sporophila": "Sporophilinae",
+                "Stephanophorus": "Thraupinae",
+                "Stilpnia": "Thraupinae",
+                "Tachyphonus": "Tachyphoninae",
+                "Tangara": "Thraupinae",
+                "Tersina": "Dacninae",
+                "Thlypopsis": "Poospizinae",
+                "Thraupis": "Thraupinae",
+                "Trichothraupis": "Tachyphoninae",
+                "Volatinia": "Tachyphoninae",
+            };
+            const subfamilia = subfamiliaMap[genus] || "";
             speciesInfo[nomeCientifico] = {
                 ordem: ordem,
                 familia: familia,
