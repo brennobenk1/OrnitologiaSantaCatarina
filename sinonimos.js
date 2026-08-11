@@ -1,27 +1,27 @@
 /* ============================================================
    SINÔNIMOS TAXONÔMICOS — Ornitologia Avançada de Santa Catarina
    ------------------------------------------------------------
-   Permite que o usuário digite um nome científico antigo
-   (ex.: "Bubulcus ibis") e o site resolva para o nome atualmente
-   aceito (ex.: "Ardea ibis"), e vice-versa.
+   Faz o site aceitar nomes científicos antigos. Quem digita
+   "Bubulcus ibis" ou "Ardea ibis" chega na mesma espécie.
 
-   INSTALAÇÃO: carregue DEPOIS do main.js
+   INSTALAÇÃO: carregar DEPOIS do main.js
        <script src="main.js"></script>
        <script src="sinonimos.js"></script>
 
-   O módulo se instala sozinho: envolve as funções de busca já
-   existentes (findBirdFuzzy, findBirdByNormalizedName,
-   fuzzySearchCandidates) sem alterá-las.
+   COMO FUNCIONA
+   O main.js concentra toda a busca em normalizeForSearch(): a
+   autocomplete, o findBirdFuzzy e a correcaoAutocomplete passam
+   por ela antes de consultar o searchIndex. Este módulo troca
+   essa função por uma versão que traduz sinônimo -> nome do banco.
+   Assim a resolução vale para todos os caminhos de busca de uma
+   vez, sem precisar remendar cada um.
+
+   getSpeciesInfo() não usa normalizeForSearch (compara string
+   direto), então é envolvida à parte.
    ============================================================ */
 (function () {
     'use strict';
 
-    /* ------------------------------------------------------------
-       1. DICIONÁRIO
-       Cada grupo: aceito = nome atualmente válido (IOC/Clements/SACC)
-                   sin    = nomes antigos ainda encontrados na literatura
-       Só inclui espécies presentes na lista de Santa Catarina.
-       ------------------------------------------------------------ */
     const GRUPOS = [
         // ---- Correções pendentes na base do site ----
         { aceito: 'Ardea ibis',                  sin: ['Bubulcus ibis', 'Ardeola ibis', 'Egretta ibis'] },
@@ -238,7 +238,6 @@
         { aceito: 'Thlypopsis pyrrhocoma',       sin: ['Hemithraupis pyrrhocoma', 'Pyrrhocoma ruficeps'] },
         { aceito: 'Emberizoides ypiranganus',    sin: ['Emberizoides herbicola ypiranganus'] }
     ];
-
     /* ------------------------------------------------------------
        2. ÍNDICE
        ------------------------------------------------------------ */
@@ -248,108 +247,127 @@
                 .toLowerCase().replace(/[-\s]+/g, ' ').trim();
     }
 
-    // mapa: qualquer nome normalizado -> { aceito, todos: [...] }
-    const MAPA = new Map();
-    GRUPOS.forEach(g => {
-        const todos = [g.aceito, ...g.sin];
-        todos.forEach(n => MAPA.set(norm(n), { aceito: g.aceito, todos: todos }));
+    const MAPA = new Map();   // nome normalizado -> { aceito, todos }
+    GRUPOS.forEach(function (g) {
+        const todos = [g.aceito].concat(g.sin);
+        todos.forEach(function (n) { MAPA.set(norm(n), { aceito: g.aceito, todos: todos }); });
     });
-
-    /* ------------------------------------------------------------
-       3. RESOLUÇÃO
-       Devolve todos os nomes equivalentes ao que foi digitado,
-       para que a busca tente cada um contra o BIRD_DATABASE.
-       ------------------------------------------------------------ */
-    function equivalentes(entrada) {
-        const g = MAPA.get(norm(entrada));
-        return g ? g.todos : [entrada];
-    }
 
     function nomeAceito(entrada) {
         const g = MAPA.get(norm(entrada));
         return g ? g.aceito : entrada;
     }
+    function equivalentes(entrada) {
+        const g = MAPA.get(norm(entrada));
+        return g ? g.todos : [entrada];
+    }
 
     /* ------------------------------------------------------------
-       4. INSTALAÇÃO — envolve as funções de busca existentes
+       3. INSTALAÇÃO
        ------------------------------------------------------------ */
+    let instalado = false;
+
     function instalar() {
-        if (!window.findBirdFuzzy || !window.BIRD_DATABASE) return false;
+        if (instalado) return true;
+        if (!window.BIRD_DATABASE || !window.BIRD_DATABASE.length) return false;
+        if (typeof window.normalizeForSearch !== 'function') return false;
 
-        // 4.1 — busca principal: tenta cada nome equivalente
-        const _findBirdFuzzy = window.findBirdFuzzy;
-        window.findBirdFuzzy = function (input) {
-            const direto = _findBirdFuzzy(input);
-            if (direto && direto.confident) return direto;
+        // 3.1 — nomeDoBanco: dado qualquer sinônimo, devolve o nome
+        // que realmente existe no BIRD_DATABASE (pode ser o antigo,
+        // se a base ainda não foi atualizada).
+        const porNome = new Map();
+        window.BIRD_DATABASE.forEach(function (b) { porNome.set(norm(b.scientificName), b); });
 
-            for (const alt of equivalentes(input)) {
-                if (norm(alt) === norm(input)) continue;
-                const r = _findBirdFuzzy(alt);
-                if (r && r.confident) {
-                    r.viaSinonimo = true;
-                    r.nomeDigitado = input;
-                    r.nomeAceito = nomeAceito(input);
-                    return r;
-                }
+        const TRADUZ = new Map();   // normalizado digitado -> nome do banco
+        MAPA.forEach(function (g, chave) {
+            for (let i = 0; i < g.todos.length; i++) {
+                const alvo = porNome.get(norm(g.todos[i]));
+                if (alvo) { TRADUZ.set(chave, alvo.scientificName); break; }
             }
-            return direto;
-        };
+        });
 
-        // 4.2 — a função usada pelo processamento de listas
-        window.findBirdByNormalizedName = function (input) {
-            const r = window.findBirdFuzzy(input);
-            return r ? r.bird : null;
-        };
-        if (typeof findBirdByNormalizedName !== 'undefined') {
-            try { findBirdByNormalizedName = window.findBirdByNormalizedName; } catch (e) {}
+        function nomeDoBanco(entrada) {
+            return TRADUZ.get(norm(entrada)) || null;
         }
 
-        // 4.3 — autocomplete: sugere o nome aceito quando se digita o antigo
-        if (window.fuzzySearchCandidates) {
+        // 3.2 — normalizeForSearch: o ponto único por onde passa
+        // toda busca. Traduz o sinônimo antes de normalizar.
+        const _normalize = window.normalizeForSearch;
+        window.normalizeForSearch = function (str) {
+            const alvo = nomeDoBanco(str);
+            return _normalize(alvo !== null ? alvo : str);
+        };
+        try { normalizeForSearch = window.normalizeForSearch; } catch (e) {}
+
+        // 3.3 — getSpeciesInfo compara string direto, sem passar
+        // pela normalização. Precisa do seu próprio tratamento.
+        if (typeof window.getSpeciesInfo === 'function') {
+            const _info = window.getSpeciesInfo;
+            window.getSpeciesInfo = function (nome) {
+                const alvo = nomeDoBanco(nome);
+                return _info(alvo !== null ? alvo : nome);
+            };
+            try { getSpeciesInfo = window.getSpeciesInfo; } catch (e) {}
+        }
+
+        // 3.4 — autocomplete com nome parcial ("Xolmis cin"): o
+        // searchIndex só conhece os nomes atuais, então os sinônimos
+        // que casam com o prefixo digitado entram como extras.
+        if (typeof window.fuzzySearchCandidates === 'function') {
             const _cands = window.fuzzySearchCandidates;
             window.fuzzySearchCandidates = function (normVal, limit) {
                 const base = _cands(normVal, limit) || [];
                 if (!normVal || normVal.length < 3) return base;
 
+                const vistos = new Set(base.map(function (m) { return m.scientific; }));
                 const extras = [];
-                MAPA.forEach((g, chave) => {
-                    if (!chave.includes(normVal)) return;
-                    if (norm(g.aceito) === chave) return;      // já é o aceito
-                    const alvo = window.BIRD_DATABASE.find(b =>
-                        g.todos.some(n => norm(n) === norm(b.scientificName)));
-                    if (!alvo) return;
-                    if (base.some(m => m.scientific === alvo.scientificName)) return;
+                TRADUZ.forEach(function (nomeBanco, chave) {
+                    if (chave.indexOf(normVal) !== 0) return;      // só prefixo
+                    if (norm(nomeBanco) === chave) return;         // já é o nome atual
+                    if (vistos.has(nomeBanco)) return;
+                    const b = porNome.get(norm(nomeBanco));
+                    if (!b) return;
+                    vistos.add(nomeBanco);
                     extras.push({
-                        text: `<em>${chave}</em> → <strong>${g.aceito}</strong> – ${alvo.commonName}`,
+                        text: chave + ' → ' + b.scientificName + ' – ' + b.commonName,
                         normalized: chave,
-                        scientific: alvo.scientificName,
-                        common: alvo.commonName,
-                        nc: norm(alvo.commonName),
-                        ns: norm(alvo.scientificName),
-                        data: alvo,
+                        scientific: b.scientificName,
+                        common: b.commonName,
+                        nc: norm(b.commonName),
+                        ns: norm(b.scientificName),
+                        data: b,
                         sinonimo: true
                     });
                 });
-                return base.concat(extras).slice(0, limit || 10);
+                return extras.length ? base.concat(extras).slice(0, limit || 10) : base;
             };
+            try { fuzzySearchCandidates = window.fuzzySearchCandidates; } catch (e) {}
         }
 
-        // 4.4 — API pública
+        // 3.5 — API pública
         window.SinonimosAves = {
             grupos: GRUPOS,
-            equivalentes: equivalentes,
             nomeAceito: nomeAceito,
+            equivalentes: equivalentes,
+            nomeDoBanco: nomeDoBanco,
             ehSinonimo: function (n) {
                 const g = MAPA.get(norm(n));
                 return !!g && norm(g.aceito) !== norm(n);
             }
         };
+
+        instalado = true;
         return true;
     }
 
+    // O main.js monta o BIRD_DATABASE de forma síncrona, então em
+    // condições normais a instalação ocorre já na primeira chamada.
     if (!instalar()) {
-        // main.js ainda não terminou de carregar
         document.addEventListener('DOMContentLoaded', instalar);
         window.addEventListener('load', instalar);
+        let tentativas = 0;
+        const t = setInterval(function () {
+            if (instalar() || ++tentativas > 40) clearInterval(t);
+        }, 100);
     }
 })();
