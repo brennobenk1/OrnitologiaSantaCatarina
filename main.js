@@ -9252,8 +9252,12 @@ function updateCurveLegend() {
         const LEGEND_H     = Math.max(legendLines * 22, 44);
 
         function makeChart(id, title, countObj, palette) {
-            const labels = Object.keys(countObj);
-            const data   = Object.values(countObj);
+            // Ordena do maior para o menor (empate → ordem alfabética)
+            const ordenado = Object.entries(countObj)
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+
+            const labels = ordenado.map(e => e[0]);
+            const data   = ordenado.map(e => e[1]);
             const colors = labels.map(l => palette[l] || '#999');
 
             // Legenda HTML externa — mesma altura para ambos
