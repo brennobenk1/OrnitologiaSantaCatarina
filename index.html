@@ -1060,6 +1060,22 @@
         <div id="indicadoras-results" class="table-container" style="max-height:420px; overflow-y:auto; margin-top:14px;"></div>
         <div style="margin-top:18px;"><canvas id="indicadorasChart" style="width:100%; max-height:320px; height:320px;"></canvas></div>
         <div id="indicadoras-analysis" style="margin-top:18px;"></div>
+        <details style="margin-top:18px;background:#f7faf3;border:1px solid var(--border-light);border-radius:8px;padding:12px 16px;font-size:12.5px;line-height:1.7;">
+            <summary style="cursor:pointer;font-weight:600;color:var(--green-deep);font-size:13px;">📚 Referências dos critérios de sensibilidade</summary>
+            <p style="margin:10px 0 6px;"><strong>Estrutura do índice (soma de métricas → classes)</strong></p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">KARR, J. R. Assessment of biotic integrity using fish communities. <em>Fisheries</em>, v. 6, n. 6, p. 21–27, 1981.</p>
+            <p style="margin:0 0 12px;padding-left:14px;text-indent:-14px;">O’CONNELL, T. J.; JACKSON, L. E.; BROOKS, R. P. Bird guilds as indicators of ecological condition in the central Appalachians. <em>Ecological Applications</em>, v. 10, n. 6, p. 1706–1721, 2000.</p>
+            <p style="margin:0 0 6px;"><strong>Guilda alimentar e especialização trófica</strong></p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">SEKERCIOGLU, C. H.; DAILY, G. C.; EHRLICH, P. R. Ecosystem consequences of bird declines. <em>PNAS</em>, v. 101, n. 52, p. 18042–18047, 2004.</p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">STOUFFER, P. C.; BIERREGAARD JR., R. O. Use of Amazonian forest fragments by understory insectivorous birds. <em>Ecology</em>, v. 76, n. 8, p. 2429–2445, 1995a.</p>
+            <p style="margin:0 0 12px;padding-left:14px;text-indent:-14px;">STOUFFER, P. C.; BIERREGAARD JR., R. O. Effects of forest fragmentation on understory hummingbirds in Amazonian Brazil. <em>Conservation Biology</em>, v. 9, n. 5, p. 1085–1094, 1995b.</p>
+            <p style="margin:0 0 6px;"><strong>Sensibilidade à perturbação e habitat</strong></p>
+            <p style="margin:0 0 12px;padding-left:14px;text-indent:-14px;">STOTZ, D. F.; FITZPATRICK, J. W.; PARKER III, T. A.; MOSKOVITS, D. K. <em>Neotropical birds: ecology and conservation</em>. Chicago: University of Chicago Press, 1996.</p>
+            <p style="margin:0 0 6px;"><strong>Status de conservação</strong></p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">IUCN. <em>IUCN Red List categories and criteria: version 3.1</em>. 2. ed. Gland; Cambridge: IUCN, 2012.</p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">ICMBio. <em>Livro Vermelho da Fauna Brasileira Ameaçada de Extinção</em>. Brasília: ICMBio/MMA, 2018.</p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">SANTA CATARINA. <em>Lista Oficial das Espécies da Fauna Ameaçadas de Extinção no Estado de Santa Catarina</em>. Consema, 2011.</p>
+        </details>
     </div>
 </section>
 
@@ -1853,12 +1869,19 @@
 
         <!-- ── 17. INDICADORAS ── -->
         <h3 id="h-indicad" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">18. ⚠️ Espécies Indicadoras</h3>
-        <p style="font-size:13.5px;">Identifica quais espécies importadas são as mais <strong>sensíveis à perturbação ambiental</strong> — as primeiras a desaparecer com fragmentação, poluição ou degradação do habitat. Baseado em critérios científicos (Karr, 1981; Stouffer &amp; Bierregaard 1995; Sekercioglu et al., 2004).</p>
+        <p style="font-size:13.5px;">Identifica quais espécies importadas são as mais <strong>sensíveis à perturbação ambiental</strong> — as primeiras a desaparecer com fragmentação, poluição ou degradação do habitat. O índice é <strong>multimétrico</strong>, no formato proposto por Karr (1981) e adaptado para aves por O’Connell et al. (2000): cada espécie recebe pontos em eixos independentes, que são somados e convertidos em classes qualitativas de sensibilidade.</p>
+        <p style="font-size:13.5px;">Cada espécie pode somar até <strong>10 pontos</strong>, distribuídos em três eixos:</p>
+        <ul style="margin-left:20px;font-size:13.5px;">
+            <li><strong>Guilda alimentar (0–3)</strong> — a especialização trófica funciona como proxy de risco: quanto mais restrito o espectro alimentar, maior a probabilidade de declínio (Sekercioglu et al., 2004). Recebem <strong>3 pontos</strong> insetívoros, piscívoros, malacófagos, carnívoros e detritívoros; <strong>2</strong> frugívoros, nectarívoros e herbívoros; <strong>1</strong> insetívoros aéreos, granívoros, filtradores e cleptoparasitas; <strong>0</strong> onívoros. Em guildas compostas vale o maior valor.</li>
+            <li><strong>Habitat (0–3)</strong> — dependência de ambientes estruturalmente sensíveis, seguindo o índice de sensibilidade à perturbação de Stotz et al. (1996): florestal e aquático = 3; costeiro e campestre = 2; aéreo = 1; generalista = 0.</li>
+            <li><strong>Bônus de conservação (0–4)</strong> — maior valor entre o status IUCN e a Lista Vermelha de Santa Catarina: LC = 0, NT = 1, VU = 2, EN = 3, CR = 4 (IUCN, 2012; ICMBio, 2018).</li>
+        </ul>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Escolha o limiar mínimo de ameaça (ex: "VU ou mais") e clique em ▶ para executar.</li>
-            <li>Cada espécie recebe até 6 pontos: até 3 pela <strong>guilda alimentar</strong> (nectarívoros/piscívoros = especialistas = maior sensibilidade) + até 3 pelo <strong>habitat</strong> (florestal/aquático = maior dependência).</li>
-            <li>🔴 <strong>Crítica</strong> (≥5 pts) · 🟠 <strong>Alta</strong> (3–4 pts) · 🟡 <strong>Média</strong> (2 pts) · 🟢 <strong>Baixa</strong> (≤1 pt)</li>
+            <li>Classes de sensibilidade: 🔴 <strong>Crítica</strong> (≥7 pts) · 🟠 <strong>Alta</strong> (5–6 pts) · 🟡 <strong>Média</strong> (3–4 pts) · 🟢 <strong>Baixa</strong> (≤2 pts)</li>
+            <li>Os pesos por guilda seguem a literatura de fragmentação: insetívoros de sub-bosque estão entre as guildas mais sensíveis (Stouffer &amp; Bierregaard, 1995a), enquanto nectarívoros de sub-bosque mostraram-se pouco afetados pela fragmentação (Stouffer &amp; Bierregaard, 1995b) — por isso não recebem a nota máxima.</li>
         </ul>
+        <p style="font-size:12.5px;color:#666;margin-top:8px;"><em>Nota metodológica:</em> o índice de sensibilidade de Stotz et al. (1996) é a referência clássica para aves neotropicais, mas foi construído de forma subjetiva e carece de validação em campo para boa parte das espécies. O índice desta plataforma é uma aproximação baseada em traços ecológicos e deve ser interpretado como triagem comparativa, não como classificação definitiva.</p>
 
         <!-- ── 18. CLUSTER ── -->
         <h3 id="h-cluster" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">19. 🌿 Cluster Hierárquico (Dendrograma)</h3>
