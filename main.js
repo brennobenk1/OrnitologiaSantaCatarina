@@ -12157,25 +12157,66 @@ function runIndicadoras() {
         if (analEl) analEl.innerHTML = '';
         return;
     }
+    // ─────────────────────────────────────────────────────────────────────────
+    // PONTUAÇÃO DE SENSIBILIDADE — critérios e fontes
+    //
+    // Estrutura multimétrica (soma de métricas → classes de qualidade):
+    //   Karr (1981), Fisheries 6(6):21-27  [IBI original, peixes]
+    //   O'Connell, Jackson & Brooks (2000), Ecological Applications 10(6):1706-1721
+    //   [Bird Community Index: proporção de guildas especialistas vs. generalistas]
+    //
+    // Guilda alimentar (0-3) — especialização trófica como proxy de risco:
+    //   Sekercioglu, Daily & Ehrlich (2004), PNAS 101(52):18042-18047
+    //   [maior especialização → maior risco de extinção, r²=0,851; piscívoros,
+    //    herbívoros e necrófagos entre os grupos mais propensos]
+    //   Stouffer & Bierregaard (1995), Ecology 76(8):2429-2445
+    //   [insetívoros de sub-bosque: guilda mais sensível à fragmentação]
+    //   Stouffer & Bierregaard (1995), Conservation Biology 9(5):1085-1094
+    //   [nectarívoros de sub-bosque: pouco afetados pela fragmentação → nota
+    //    intermediária, e NÃO máxima como em versões anteriores deste índice]
+    //
+    // Habitat (0-3) — dependência de ambiente estruturalmente sensível:
+    //   Stotz, Fitzpatrick, Parker III & Moskovits (1996), Neotropical Birds:
+    //   Ecology and Conservation, Univ. of Chicago Press [índice de sensibilidade
+    //   à perturbação humana para as aves neotropicais]
+    //
+    // Bônus de conservação (0-4) — status de ameaça:
+    //   IUCN (2012), Red List Categories and Criteria v3.1
+    //   ICMBio (2018), Livro Vermelho da Fauna Brasileira Ameaçada de Extinção
+    //   Lista Vermelha da Fauna Ameaçada de Santa Catarina
+    // ─────────────────────────────────────────────────────────────────────────
     const GUILD_SCORE = {
-        'Nectarívoro': 3, 'Piscívoro': 3, 'Malacófago': 3,
-        'Insetívoro-aéreo': 2, 'Carnívoro': 2, 'Frugívoro': 2,
-        'Insetívoro': 1, 'Herbívoro': 1, 'Granívoro': 1, 'Filtrador': 1, 'Cleptoparasita': 1,
-        'Onívoro': 0, 'Detritívoro': 0
+        // 3 = especialistas estritos / vulnerabilidade documentada à perturbação
+        'Insetívoro': 3, 'Piscívoro': 3, 'Malacófago': 3, 'Carnívoro': 3, 'Detritívoro': 3,
+        // 2 = especialização moderada
+        'Frugívoro': 2, 'Nectarívoro': 2, 'Herbívoro': 2,
+        // 1 = tolerantes / forrageio pouco dependente da estrutura do habitat
+        'Insetívoro aéreo': 1, 'Granívoro': 1, 'Filtrador': 1, 'Cleptoparasita': 1,
+        // 0 = generalistas
+        'Onívoro': 0
     };
-    const HABITAT_SCORE = {'Florestal': 3, 'Aquático': 3, 'Costeiro': 2, 'Campestre': 1, 'Aéreo': 1, 'Generalista': 0};
+    const HABITAT_SCORE = {'Florestal': 3, 'Aquático': 3, 'Costeiro': 2, 'Campestre': 2, 'Aéreo': 1, 'Generalista': 0};
     // Bônus de conservação: integra status IUCN/SC na sensibilidade ecológica
     const CONS_BONUS = { 'LC': 0, 'NT': 1, 'VU': 2, 'EN': 3, 'CR': 4, 'DD': 0, 'NE': 0 };
     function calcSensitivity(guilda, habitat, iucn, sc) {
         if (!guilda || guilda === '-') return { level: '?', score: -1, label: '?', bg: '#f5f5f5' };
+        // Guildas compostas ("Insetívoro/Frugívoro") são separadas por "/" e
+        // pontuadas por token exato — evita que "Insetívoro aéreo" herde a nota
+        // de "Insetívoro" por correspondência parcial.
         let gScore = 0;
-        Object.entries(GUILD_SCORE).forEach(([key, val]) => { if (guilda.includes(key) && val > gScore) gScore = val; });
+        guilda.split('/').forEach(tok => {
+            const val = GUILD_SCORE[tok.trim()];
+            if (val !== undefined && val > gScore) gScore = val;
+        });
         let hScore = 0;
-        Object.entries(HABITAT_SCORE).forEach(([key, val]) => { if ((habitat||'').includes(key) && val > hScore) hScore = val; });
-        // Bônus conservação: usa o mais alto entre IUCN e SC (Livro Vermelho SP)
+        (habitat || '').split('/').forEach(tok => {
+            const val = HABITAT_SCORE[tok.trim()];
+            if (val !== undefined && val > hScore) hScore = val;
+        });
+        // Bônus conservação: usa o mais alto entre IUCN e a Lista Vermelha de SC
         const consBonus = Math.max(CONS_BONUS[iucn] ?? 0, CONS_BONUS[sc] ?? 0);
         const total = gScore + hScore + consBonus;
-        // Novos limiares com bônus integrado (máx possível: 3+3+4=10)
+        // Limiares com bônus integrado (máx possível: 3+3+4=10)
         if (total >= 7) return { level: 'Crítica', score: total, label: `🔴 Crítica (${total}pts)`, bg: '#f8d7d7' };
         if (total >= 5) return { level: 'Alta',    score: total, label: `🟠 Alta (${total}pts)`,    bg: '#fde8c8' };
         if (total >= 3) return { level: 'Média',   score: total, label: `🟡 Média (${total}pts)`,   bg: '#fdf3dc' };
