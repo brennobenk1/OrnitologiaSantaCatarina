@@ -34,7 +34,9 @@
     const CACHE_KEY   = 'iucn_cache_v2';
     const ENDPOINT    = 'https://api.gbif.org/v1';
     const CONCORRENCIA = 6;
-    const VALIDAS = ['LC', 'NT', 'VU', 'EN', 'CR', 'EW', 'EX', 'DD', 'NE'];
+    // 'NE' NÃO entra: quando o GBIF devolve NE é porque não achou avaliação
+    // para aquele nome, e gravar isso apagaria um status já conhecido.
+    const VALIDAS = ['LC', 'NT', 'VU', 'EN', 'CR', 'EW', 'EX', 'DD'];
 
     let cache = {};
     let rodando = false;
@@ -86,25 +88,56 @@
         return n;
     }
 
+    /* ------------------------------ nomes alternativos p/ tentar */
+    // O CBRO adota nomes posteriores ao arranjo do BirdLife em vários casos.
+    // Aburria jacutinga está na Red List como Pipile jacutinga; Ardea ibis,
+    // como Bubulcus ibis. Sem tentar o nome antigo a consulta volta vazia.
+    function alternativas(nome) {
+        const out = [];
+        const S = window.SinonimosAves;
+        if (S && S.grupos) {
+            S.grupos.forEach(function (g) {
+                if (g.aceito === nome) { out.push.apply(out, g.sin); }
+                else if (g.sin && g.sin.indexOf(nome) >= 0) { out.push(g.aceito); }
+            });
+        }
+        const info = window.speciesInfo && window.speciesInfo[nome];
+        if (info && info.nomeCBRO) out.push(info.nomeCBRO);
+        return out.filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+    }
+
     /* -------------------------------------------- consulta GBIF */
-    async function buscarUm(nome) {
+    async function consultar(nome) {
         const m = await fetch(ENDPOINT + '/species/match?kingdom=Animalia&class=Aves&name=' +
                               encodeURIComponent(nome));
         if (!m.ok) throw new Error('match ' + m.status);
         const mj = await m.json();
-        if (!mj.usageKey) return { nome: nome, codigo: null, motivo: 'sem correspondência no GBIF' };
+        if (!mj.usageKey) return null;
 
         const r = await fetch(ENDPOINT + '/species/' + mj.usageKey + '/iucnRedListCategory');
-        if (r.status === 404) return { nome: nome, codigo: null, motivo: 'sem avaliação IUCN' };
+        if (r.status === 404) return null;
         if (!r.ok) throw new Error('iucn ' + r.status);
         const rj = await r.json();
         const cod = (rj.code || '').toUpperCase();
+        return VALIDAS.indexOf(cod) >= 0 ? cod : null;
+    }
+
+    async function buscarUm(nome) {
+        let cod = await consultar(nome);
+        if (cod) return { nome: nome, codigo: cod, via: '' };
+
+        // segunda tentativa com os nomes que a Red List ainda usa
+        const alts = alternativas(nome);
+        for (let i = 0; i < alts.length; i++) {
+            try {
+                cod = await consultar(alts[i]);
+                if (cod) return { nome: nome, codigo: cod, via: alts[i] };
+            } catch (e) { /* segue para a próxima alternativa */ }
+        }
         return {
-            nome: nome,
-            codigo: VALIDAS.indexOf(cod) >= 0 ? cod : null,
-            motivo: cod ? '' : 'categoria não reconhecida',
-            nomeGbif: mj.scientificName || '',
-            divergeNome: mj.canonicalName && mj.canonicalName !== nome ? mj.canonicalName : ''
+            nome: nome, codigo: null, via: '',
+            motivo: 'sem avaliação global sob este nome' +
+                    (alts.length ? ' (nem sob ' + alts.join(', ') + ')' : '')
         };
     }
 
@@ -114,12 +147,17 @@
         rodando = true; abortar = false;
         indexar();
 
+        // Só entram na fila as espécies que ainda não têm categoria alguma.
+        // Um status já conhecido nunca é rebaixado por uma consulta vazia.
         const pendentes = window.CBRO_DATA.especies
-            .filter(function (e) { return !cache[e.especie]; })
+            .filter(function (e) {
+                return !cache[e.especie] && (!e.iucn || e.iucn === 'NE');
+            })
             .map(function (e) { return e.especie; });
 
         const total = pendentes.length;
         let feitos = 0, ok = 0, falhas = [];
+        const resolvidosPorSinonimo = [];
         const fila = pendentes.slice();
 
         async function worker() {
@@ -131,6 +169,7 @@
                         cache[nome] = r.codigo;
                         aplicar(nome, r.codigo);
                         ok++;
+                        if (r.via) resolvidosPorSinonimo.push(nome + ' via ' + r.via);
                     } else {
                         falhas.push({ nome: nome, motivo: r.motivo });
                     }
@@ -150,7 +189,8 @@
 
         gravarCache();
         rodando = false;
-        return { total: total, ok: ok, falhas: falhas };
+        window.IUCN_VIA_SINONIMO = resolvidosPorSinonimo;
+        return { total: total, ok: ok, falhas: falhas, viaSinonimo: resolvidosPorSinonimo };
     }
 
     /* --------------------------------------------- exportar tabela */
@@ -229,8 +269,9 @@
             go.disabled = false; stop.disabled = true;
             atualizarCobertura();
             if (r) {
-                log.textContent = 'Concluído: ' + r.ok + ' status obtidos, ' +
-                                  r.falhas.length + ' sem avaliação na Red List. ' +
+                log.textContent = 'Concluído: ' + r.ok + ' status obtidos (' +
+                                  r.viaSinonimo.length + ' via nome antigo), ' +
+                                  r.falhas.length + ' sem avaliação global sob o nome do CBRO. ' +
                                   'Use "Exportar tabela" e commite o arquivo no repositório.';
                 window.IUCN_FALHAS = r.falhas;
                 if (typeof renderConservationTableFromInput === 'function') {

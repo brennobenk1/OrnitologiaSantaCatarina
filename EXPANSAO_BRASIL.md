@@ -2,15 +2,16 @@
 
 ## Como instalar
 
-Copie os cinco arquivos para a raiz do repositório, substituindo os
-existentes. Os arquivos novos são `cbro.js` e `iucn.js`; ambos já estão referenciados
-no `index.html`, na ordem correta:
+Copie os seis arquivos para a raiz do repositório, substituindo os
+existentes. Os arquivos novos são `cbro.js`, `IUCN_TABELA.js` e `iucn.js`; os três já
+estão referenciados no `index.html`, na ordem correta:
 
 ```html
 <script src="cbro.js"></script>     <!-- base de dados (novo) -->
 <script src="main.js"></script>
 <script src="sinonimos.js"></script>
-<script src="iucn.js"></script>     <!-- status global IUCN (novo) -->
+<script src="IUCN_TABELA.js"></script>  <!-- status IUCN baked (novo) -->
+<script src="iucn.js"></script>         <!-- atualizador IUCN (novo) -->
 ```
 
 `cbro.js` **precisa** vir antes do `main.js`. Se faltar, o `main.js` lança um
@@ -130,40 +131,84 @@ receberam `sc: "NA"` (sem ocorrência registrada em SC). Adicionei `NA`,
 `EW`, `EX` e `RE` às paletas, às ordenações e ao cálculo de divergência entre
 listas, para que `NA` não seja contado como discordância.
 
-### IUCN — `iucn.js`
+### IUCN — feito, com uma auditoria pelo caminho
+
+Você rodou a varredura e mandou o `IUCN_TABELA.js`. Antes de aceitar,
+conferi contra os 689 valores que você já tinha curados: **643 bateram
+exatamente**, o que é um bom atestado da fonte. Mas a auditoria achou dois
+problemas que eu precisava corrigir antes de a tabela entrar.
+
+**Problema 1 — 158 entradas gravadas como `NE`.** O `iucn.js` estava
+aceitando `NE` como se fosse uma categoria válida. Não é: quando o GBIF
+devolve `NE` é porque não encontrou avaliação para aquele nome. Pior, em
+**32 casos isso apagava um status que você já tinha** — *Aburria jacutinga*
+ia de EN para NE, *Heteroxolmis dominicanus* de VU para NE, e mais 30 LCs.
+
+A causa é taxonômica: o CBRO adota nomes posteriores ao arranjo do BirdLife.
+A Red List conhece *Aburria jacutinga* como *Pipile jacutinga*, e *Ardea
+ibis* como *Bubulcus ibis*. Sem tentar o nome antigo, a consulta volta vazia.
+
+Corrigi nos dois lados. O `iucn.js` agora (a) não grava `NE` em hipótese
+alguma, (b) só põe na fila espécies que ainda não têm categoria — status
+conhecido nunca é rebaixado por consulta vazia — e (c) quando a primeira
+tentativa falha, refaz a busca com os nomes de `sinonimos.js` e com o
+`nomeCBRO`. Os resolvidos por esse caminho ficam em `window.IUCN_VIA_SINONIMO`.
+
+**Problema 2 — 7 divergências reais.** Nesses a tabela do GBIF e o seu
+acervo discordam, e na maioria o valor antigo do site parece ser o errado:
+
+| Espécie | Site | Red List | Comentário |
+|---|---|---|---|
+| *Pandion haliaetus* | EN | LC | águia-pescadora é LC global |
+| *Stercorarius parasiticus* | EN | LC | |
+| *Anas acuta* | VU | LC | |
+| *Asio flammeus* | NT | LC | |
+| *Phylloscartes eximius* | NT | LC | |
+| *Cyanocorax caeruleus* | VU | NT | reclassificada |
+| *Hydropsalis anomala* | NT | VU | reclassificada |
+
+Adotei o valor da Red List nos sete. Se algum tiver razão de ser diferente na
+sua base, é trocar na mão no `IUCN_TABELA.js`.
+
+**Resultado.** O `IUCN_TABELA.js` que está no pacote é a versão auditada:
+
+| | |
+|---|---|
+| Com status global | **1.836** de 1.972 (93%) |
+| — vindas do GBIF | 1.797 |
+| — preservadas do seu acervo | 39 |
+| Sem status | 136 |
+
+Distribuição: 1.595 LC · 93 NT · 91 VU · 37 EN · 17 CR · 2 EX · 1 EW.
+
+As 136 restantes não são falha da varredura: são táxons que o CBRO separa e
+o BirdLife ainda agrupa, então não existe avaliação global sob esse nome.
+Concentram-se em Dendrocolaptidae (17), Thamnophilidae (17) e Thraupidae
+(13) — exatamente os grupos com mais *splits* amazônicos recentes. Ficam
+como `NE`, que aqui é a resposta correta.
+
+### Como o `iucn.js` funciona
 
 A Portaria 1.704/2026 não contém nenhum dado da IUCN. São listas diferentes:
 mesmos critérios, escalas diferentes (nacional x global), e divergem com
 frequência — *Penelope superciliaris* é LC no ICMBio e NT na IUCN.
 
-Procurei uma base bulk da Red List que eu pudesse embutir e não achei
-nenhuma aberta e atual. Digitar 1.283 categorias de memória produziria
-dezenas de erros silenciosos numa base científica, então fiz outra coisa:
-**`iucn.js`**, um módulo que busca as categorias na API pública do GBIF, que
-espelha a Red List oficial e não exige chave de acesso.
+O módulo busca as categorias na API pública do GBIF, que espelha a Red List
+oficial e não exige chave de acesso.
 
-Como funciona: um painel aparece no canto inferior esquerdo mostrando a
+Um painel aparece no canto inferior esquerdo mostrando a
 cobertura atual. Ao clicar em *Completar status IUCN*, ele resolve cada nome
 no backbone do GBIF e busca a categoria, seis consultas em paralelo, com o
 resultado salvo no navegador conforme avança — dá para parar e retomar.
 
-Terminada a varredura, **Exportar tabela** gera um `IUCN_TABELA.js` com todas
-as categorias. Commite esse arquivo e inclua antes do `iucn.js`:
+Terminada a varredura, **Exportar tabela** regenera o `IUCN_TABELA.js`. Ele
+já está incluído no `index.html`, antes do `iucn.js`, e tem prioridade sobre
+o cache do navegador — o site carrega os status na hora, sem rede.
 
-```html
-<script src="IUCN_TABELA.js"></script>
-<script src="iucn.js"></script>
-```
-
-A partir daí o site carrega os status na hora, sem rede, e a tabela tem
-prioridade sobre o cache local. Quando sair uma versão nova da Red List,
-basta apagar o cache (`IUCN.limpar()` no console) e rodar de novo.
-
-Os 689 valores que você já tinha continuam intactos e servem de conferência:
-se o GBIF divergir de algum deles, vale investigar antes de aceitar.
-
-A varredura leva alguns minutos. Espécies sem avaliação na Red List ficam
-listadas em `window.IUCN_FALHAS` depois que termina.
+Quando sair uma versão nova da Red List, rode `IUCN.limpar()` no console e
+clique em *Completar status IUCN* de novo. Só que **reaudite antes de
+commitar**: exporte, compare com o arquivo atual e olhe as diferenças. Foi
+assim que os 32 rebaixamentos apareceram.
 
 ---
 
@@ -264,12 +309,14 @@ Campos novos em `speciesInfo` e `BIRD_DATABASE`: `ingles`, `genero`,
 
 ## O que revisar antes de publicar
 
-1. **IUCN** — rodar a varredura do `iucn.js` uma vez e commitar o
-   `IUCN_TABELA.js` gerado.
-2. **Guilda de 1.284 espécies** — inferida por família, marcada com **fam.**
-3. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
-4. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas
+1. **As 7 divergências IUCN** da tabela acima — decidir se aceita o valor da
+   Red List ou mantém o seu.
+2. **136 espécies sem status global** — são *splits* que o BirdLife não
+   reconhece. Nada a fazer até a Red List incorporar o arranjo do CBRO.
+3. **Guilda de 1.284 espécies** — inferida por família, marcada com **fam.**
+4. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
+5. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas
    não têm imagem associada.
-5. **`sinonimos.js`** — cobre bem os táxons de SC. Para o resto do país faltam
+6. **`sinonimos.js`** — cobre bem os táxons de SC. Para o resto do país faltam
    sinônimos amazônicos e do Cerrado.
-6. **Textos institucionais** que ainda citem SC em seções que não revisei.
+7. **Textos institucionais** que ainda citem SC em seções que não revisei.
