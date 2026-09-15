@@ -1075,6 +1075,7 @@
             <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">IUCN. <em>IUCN Red List categories and criteria: version 3.1</em>. 2. ed. Gland; Cambridge: IUCN, 2012.</p>
             <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">ICMBio. <em>Livro Vermelho da Fauna Brasileira Ameaçada de Extinção</em>. Brasília: ICMBio/MMA, 2018.</p>
             <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">SANTA CATARINA. <em>Lista Oficial das Espécies da Fauna Ameaçadas de Extinção no Estado de Santa Catarina</em>. Consema, 2011.</p>
+            <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">TOBIAS, J. A. <em>et al.</em> AVONET: morphological, ecological and geographical data for all birds. <em>Ecology Letters</em>, v. 25, n. 3, p. 581-597, 2022. DOI: 10.1111/ele.13898.</p>
             <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">PACHECO, J. F. <em>et al.</em> Annotated checklist of the birds of Brazil by the Brazilian Ornithological Records Committee — second edition. <em>Ornithology Research</em>, v. 29, n. 2, 2021. DOI: 10.1007/s43388-021-00058-x.</p>
             <p style="margin:0 0 8px;padding-left:14px;text-indent:-14px;">BRASIL. Ministério do Meio Ambiente e Mudança do Clima. <em>Portaria MMA nº 1.704, de 16 de junho de 2026</em>. Lista Nacional Oficial das Espécies da Fauna Ameaçadas de Extinção. Diário Oficial da União, Brasília, 17 jun. 2026, Edição 111-B, Seção 1 - Extra B, p. 15.</p>
         </details>
@@ -1708,10 +1709,10 @@
         <p style="font-size:13.5px;"><strong>Nomes que mudaram.</strong> A taxonomia de aves se move rápido, e o site adota alguns nomes posteriores ao CBRO 2021. Se você digitar um nome antigo — <em>Bubulcus ibis</em>, <em>Accipiter bicolor</em>, <em>Pipile jacutinga</em> — o sistema reconhece e avisa qual é o nome aceito. São mais de 200 sinônimos mapeados.</p>
 
         <div style="background:#fff8e8;border:1px solid var(--amber-light);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;color:#5a4000;">
-            <strong>⚠️ Duas lacunas que você deve conhecer:</strong>
+            <strong>⚠️ As duas lacunas conhecidas — ambas com a mesma causa:</strong>
             <ul style="margin:6px 0 0 18px;">
-                <li><strong>136 espécies sem status IUCN.</strong> Não é falha de carregamento: são táxons que o CBRO separa e o BirdLife ainda agrupa, então não existe avaliação global sob esse nome. Aparecem como <strong>NE</strong>. Concentram-se em Dendrocolaptidae, Thamnophilidae e Thraupidae.</li>
-                <li><strong>Guilda inferida por família.</strong> 688 espécies têm atribuição trófica revisada uma a uma; as demais herdam a guilda típica da família e aparecem com o selo tracejado <strong>fam.</strong> na aba Guilda. Use com cautela em famílias ecologicamente heterogêneas, como Furnariidae e Tyrannidae.</li>
+                <li><strong>136 espécies sem status IUCN.</strong> Não é falha de carregamento: são táxons que o CBRO separa e o BirdLife ainda agrupa, então não existe avaliação global sob esse nome. Aparecem como <strong>NE</strong>.</li>
+                <li><strong>74 espécies sem traços funcionais.</strong> A guilda trófica de 1.898 espécies vem de fonte publicada — 688 da curadoria original e 1.210 do AVONET. As 74 restantes são <em>splits</em> recentes do CBRO que ainda não entraram em nenhuma base de traços, e ficam sem guilda em vez de receber palpite.</li>
             </ul>
         </div>
 
@@ -1846,11 +1847,19 @@
 
         <!-- ── 11. GUILDA ── -->
         <h3 id="h-guilda" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">11. 🍽️ Guilda Alimentar</h3>
-        <p style="font-size:13.5px;">Mostra o que cada espécie come e em que ambiente vive. A <strong>guilda alimentar</strong> é a categoria ecológica baseada na dieta (ex: Insetívoro, Frugívoro, Granívoro, Carnívoro, Nectarívoro).</p>
+        <p style="font-size:13.5px;">Mostra o que cada espécie come e em que ambiente vive. A <strong>guilda alimentar</strong> é a categoria ecológica baseada na dieta (Insetívoro, Frugívoro, Granívoro, Carnívoro, Nectarívoro, Predador aquático, Necrófago, entre outras).</p>
+        <div style="background:var(--green-mist);border-left:3px solid var(--green-base);border-radius:0 6px 6px 0;padding:10px 14px;margin:12px 0;font-size:13px;">
+            <strong>📌 De onde vem cada atribuição.</strong> São 1.898 espécies com dado funcional publicado, nenhuma estimada:<br>
+            · <strong>688</strong> da curadoria original deste site, revisadas uma a uma;<br>
+            · <strong>1.210</strong> do <strong>AVONET</strong> (Tobias <em>et al.</em>, 2022), levantamento de traços funcionais de 11.009 espécies de aves. Aparecem com o selo azul <strong>AVONET</strong> — passe o mouse para ver o nicho trófico, o nível trófico e o hábito de vida originais do dataset.<br>
+            · Dessas, <strong>23</strong> são <em>splits</em> recentes que herdaram os traços do táxon do qual foram separadas, conforme a nota do próprio CBRO. O selo mostra qual.<br><br>
+            As <strong>74</strong> espécies restantes ficam sem guilda. São descrições novas que ainda não entraram em nenhuma base de traços, e preferi deixar em branco a preencher com suposição.
+        </div>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Filtre por guilda ou por tipo de habitat usando os menus suspensos.</li>
             <li>A presença de muitos frugívoros indica floresta madura; muitos onívoros generalistas pode indicar ambiente degradado.</li>
-            <li>Dois gráficos de rosca mostram a composição por dieta e por tipo de habitat (florestal, aquático, campestre, generalista).</li>
+            <li>Dois gráficos de rosca mostram a composição por dieta e por tipo de habitat: florestal, campestre, aquático, costeiro, marinho, aéreo, urbano ou generalista.</li>
+            <li>O campo de descrição do AVONET resume nicho, hábito e ambiente — <em>"Invertívoro arborícola de floresta densa; parcialmente migratório"</em>. É texto montado a partir das colunas do dataset, não redação livre.</li>
         </ul>
 
         <!-- ── 12. CADEIA ALIMENTAR ── -->
@@ -1990,7 +1999,7 @@
 
         <p style="text-align:center;margin-top:24px;padding:14px;background:#eef4e4;border-radius:8px;color:var(--green-deep);font-size:13.5px;">
             <strong>Desenvolvido por Brenno Alef Benk — TCC em Biologia (2026)</strong><br>
-            <span style="font-size:12.5px;color:#5a7a5a;">1.972 espécies do Brasil · Fontes: CBRO (2021), WikiAves, GBIF, eBird, Consema/SC, ICMBio (Portaria MMA 1.704/2026), IUCN</span>
+            <span style="font-size:12.5px;color:#5a7a5a;">1.972 espécies do Brasil · Fontes: CBRO (2021), AVONET (2022), WikiAves, GBIF, eBird, Consema/SC, ICMBio (Portaria MMA 1.704/2026), IUCN</span>
         </p>
 
         </div><!-- /sources-list -->

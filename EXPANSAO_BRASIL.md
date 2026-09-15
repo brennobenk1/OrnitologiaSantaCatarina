@@ -212,18 +212,78 @@ assim que os 32 rebaixamentos apareceram.
 
 ---
 
-## Guilda trófica
+## Guilda trófica — refeita espécie a espécie
 
-As 688 atribuições que você curou estão preservadas e marcadas
-`fonte: "especie"`. As outras 1.284 receberam inferência no nível de
-**família** (102 famílias), marcada `fonte: "familia"`.
+A inferência por família saiu. No lugar entrou o **AVONET** (Tobias *et al.*,
+2022, *Ecology Letters* 25(3):581-597), levantamento de traços funcionais
+revisados para as 11.009 espécies de aves do mundo, com nicho trófico, nível
+trófico, habitat, densidade de vegetação, hábito de vida e comportamento
+migratório por espécie.
 
-Na tabela de guildas essas aparecem com um selo tracejado **fam.** ao lado da
-guilda. É um dado aproximado — *Trochilidae* inteira como "Nectarívoro"
-funciona, mas *Furnariidae* e *Tyrannidae* têm variação interna grande e
-merecem revisão espécie a espécie.
+| Origem | Espécies |
+|---|---|
+| Curadoria original do site | 688 |
+| AVONET, correspondência direta | 1.187 |
+| AVONET, via táxon parental | 23 |
+| **Total com dado publicado** | **1.898** |
+| Sem dado funcional | 74 |
 
----
+O casamento dos nomes foi feito em quatro passos, do mais seguro ao menos:
+
+1. **Nome exato** nas taxonomias BirdLife e eBird do AVONET — 1.825 espécies.
+2. **Sinônimos** do `sinonimos.js` e o campo `nomeCBRO` — mais 20.
+3. **Recombinação de gênero**: mesmo epíteto, mesma família, e só quando a
+   correspondência no AVONET é única. *Podager nacunda* → *Chordeiles nacunda*,
+   *Tamatia tamatia* → *Bucco tamatia*. Mais 24.
+4. **Táxon parental**, para *splits* recentes: quando a nota do próprio CBRO
+   diz de qual espécie o táxon foi separado, e esse nome existe no AVONET
+   dentro da mesma família, a espécie herda os traços do parental. *Numenius
+   hudsonicus* ← *N. phaeopus*, *Falco aesalon* ← *F. columbarius*, os quatro
+   *Cyphorhinus* ← *C. arada*. Mais 23, marcadas `AVONET-parental` com o nome
+   do parental no selo.
+
+Sete casos em que a nota citava mais de um táxon possível foram descartados em
+vez de escolhidos no chute — os três *Megascops* novos, por exemplo, cuja nota
+menciona tanto *M. atricapilla* quanto *M. watsonii*.
+
+### As 74 que ficaram sem guilda
+
+São descrições e *splits* posteriores ao AVONET que ainda não entraram em
+nenhuma base de traços: 74 espécies, concentradas em Dendrocolaptidae
+(*Dendrocolaptes medius*, *retentus*, *transfasciatus*…), Thamnophilidae e
+Furnariidae. Ficam em branco. Preencher seria exatamente o achismo que você
+pediu para tirar.
+
+### O que o selo mostra agora
+
+O selo tracejado **fam.** deixou de existir. No lugar há um selo azul
+**AVONET** nas 1.210 espécies vindas do dataset, e o tooltip traz os valores
+originais: nicho trófico, nível trófico e hábito de vida em inglês, como estão
+na publicação. As 688 da curadoria não levam selo.
+
+A descrição dessas espécies passou a ser montada a partir das colunas do
+dataset, não escrita por mim: *"Invertívoro arborícola de floresta densa;
+parcialmente migratório"* sai de `Trophic.Niche` + `Primary.Lifestyle` +
+`Habitat` + `Habitat.Density` + `Migration`.
+
+### Vocabulário e divergências
+
+O AVONET usa categorias mais grossas que as suas. Onde você escreveu
+*Malacófago* para o caramujeiro, ele diz *Aquatic predator*; onde você
+distinguiu *Insetívoro/Carnívoro*, ele resolve como *Carnivore*. Mantive a sua
+atribuição sempre que existia — ela é mais fina — e guardei a leitura do
+AVONET nos campos `guildaAvonet` e `habitatAvonet` para comparação.
+
+Há **432 espécies** em que as duas discordam. Não são erros, são granularidades
+diferentes, mas vale uma passada de olho: consulte
+`Object.entries(CBRO_DATA.guildas).filter(([,v]) => v.guildaAvonet && v.guildaAvonet !== v.guilda)`
+no console.
+
+Duas categorias novas entraram no vocabulário por virem do dataset:
+**Predador aquático** (86 espécies — cobre piscívoros e também quem come
+molusco e crustáceo) e **Necrófago**. Os habitats agora são oito: Florestal
+(1.238), Campestre (246), Aquático (186), Generalista (79), Costeiro (65),
+Marinho (47), Aéreo (26) e Urbano (11).
 
 ## Taxonomia
 
@@ -376,10 +436,12 @@ O arquivo caiu de 15 KB para 8 KB.
    Red List ou mantém o seu.
 2. **136 espécies sem status global** — são *splits* que o BirdLife não
    reconhece. Nada a fazer até a Red List incorporar o arranjo do CBRO.
-3. **Guilda de 1.284 espécies** — inferida por família, marcada com **fam.**
-4. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
-5. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas
+3. **432 divergências entre a sua curadoria e o AVONET** — granularidade
+   diferente, não erro, mas vale revisar.
+4. **74 espécies sem guilda** — aguardam entrar numa base de traços.
+5. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
+6. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas
    não têm imagem associada.
-6. **`sinonimos.js`** — cobre bem os táxons de SC. Para o resto do país faltam
+7. **`sinonimos.js`** — cobre bem os táxons de SC. Para o resto do país faltam
    sinônimos amazônicos e do Cerrado.
-7. **Textos institucionais** que ainda citem SC em seções que não revisei.
+8. **Textos institucionais** que ainda citem SC em seções que não revisei.
