@@ -1033,6 +1033,17 @@
         .status-CR { color: #922b21; font-weight: 800; }
         .status-DD { color: #717d7e; }
         .status-NE { color: #9eaeb0; }
+        .status-EW { color: #6c3483; font-weight: 800; }
+        .status-EX { color: #2c3e50; font-weight: 800; }
+        .status-RE { color: #4a235a; font-weight: 800; }
+        .status-NA { color: #c3cbcc; font-weight: 500; }
+        /* Guilda inferida no nivel de familia - dado aproximado, nao curado */
+        .guild-source-familia {
+            display: inline-block; margin-left: 6px; padding: 1px 6px;
+            border: 1px dashed #b0872a; border-radius: 10px;
+            background: rgba(243, 156, 18, 0.12); color: #8a6516;
+            font-size: 10.5px; font-weight: 700; vertical-align: middle; cursor: help;
+        }
 
         /* ── Botões de grupo ── */
         .buttons {
