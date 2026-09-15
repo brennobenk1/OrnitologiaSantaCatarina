@@ -224,9 +224,9 @@ migratório por espécie.
 |---|---|
 | Curadoria original do site | 688 |
 | AVONET, correspondência direta | 1.187 |
-| AVONET, via táxon parental | 23 |
-| **Total com dado publicado** | **1.898** |
-| Sem dado funcional | 74 |
+| AVONET, via táxon parental | 41 |
+| **Total com dado publicado** | **1.916** |
+| Sem dado funcional | 56 |
 
 O casamento dos nomes foi feito em quatro passos, do mais seguro ao menos:
 
@@ -239,14 +239,13 @@ O casamento dos nomes foi feito em quatro passos, do mais seguro ao menos:
    diz de qual espécie o táxon foi separado, e esse nome existe no AVONET
    dentro da mesma família, a espécie herda os traços do parental. *Numenius
    hudsonicus* ← *N. phaeopus*, *Falco aesalon* ← *F. columbarius*, os quatro
-   *Cyphorhinus* ← *C. arada*. Mais 23, marcadas `AVONET-parental` com o nome
-   do parental no selo.
+   *Cyphorhinus* ← *C. arada*. Mais 41, marcadas `AVONET-parental`, com o nome do parental no tooltip.
 
 Sete casos em que a nota citava mais de um táxon possível foram descartados em
 vez de escolhidos no chute — os três *Megascops* novos, por exemplo, cuja nota
 menciona tanto *M. atricapilla* quanto *M. watsonii*.
 
-### As 74 que ficaram sem guilda
+### As 56 que ficaram sem guilda
 
 São descrições e *splits* posteriores ao AVONET que ainda não entraram em
 nenhuma base de traços: 74 espécies, concentradas em Dendrocolaptidae
@@ -445,9 +444,9 @@ O arquivo caiu de 15 KB para 8 KB.
    Red List ou mantém o seu.
 2. **136 espécies sem status global** — são *splits* que o BirdLife não
    reconhece. Nada a fazer até a Red List incorporar o arranjo do CBRO.
-3. **432 divergências entre a sua curadoria e o AVONET** — granularidade
+3. **56 espécies sem guilda** — o CBRO as reconhece, o BirdLife ainda não.
+4. **432 divergências entre a sua curadoria e o AVONET** — granularidade
    diferente, não erro, mas vale revisar.
-4. **74 espécies sem guilda** — aguardam entrar numa base de traços.
 5. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
 6. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas
    não têm imagem associada.
