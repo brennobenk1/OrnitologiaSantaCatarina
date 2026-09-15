@@ -254,12 +254,13 @@ nenhuma base de traços: 74 espécies, concentradas em Dendrocolaptidae
 Furnariidae. Ficam em branco. Preencher seria exatamente o achismo que você
 pediu para tirar.
 
-### O que o selo mostra agora
+### Procedência, sem poluir a tabela
 
-O selo tracejado **fam.** deixou de existir. No lugar há um selo azul
-**AVONET** nas 1.210 espécies vindas do dataset, e o tooltip traz os valores
-originais: nicho trófico, nível trófico e hábito de vida em inglês, como estão
-na publicação. As 688 da curadoria não levam selo.
+O selo tracejado **fam.** deixou de existir e nenhum selo entrou no lugar — a
+coluna Guilda voltou a mostrar só a guilda. A procedência ficou no tooltip da
+célula: passando o mouse, as espécies do AVONET mostram nicho trófico, nível
+trófico e hábito de vida como estão na publicação; as da curadoria dizem que
+foram revisadas aqui.
 
 A descrição dessas espécies passou a ser montada a partir das colunas do
 dataset, não escrita por mim: *"Invertívoro arborícola de floresta densa;
@@ -278,6 +279,11 @@ Há **432 espécies** em que as duas discordam. Não são erros, são granularid
 diferentes, mas vale uma passada de olho: consulte
 `Object.entries(CBRO_DATA.guildas).filter(([,v]) => v.guildaAvonet && v.guildaAvonet !== v.guilda)`
 no console.
+
+As classes de cor que faltavam entraram no `style.css`: os habitats
+**Marinho** e **Urbano** apareciam sem fundo, como texto solto no meio de
+badges coloridos, e as guildas **Predador aquático** e **Necrófago** caíam no
+cinza genérico. Agora todos os 8 habitats e todas as guildas têm cor própria.
 
 Duas categorias novas entraram no vocabulário por virem do dataset:
 **Predador aquático** (86 espécies — cobre piscívoros e também quem come
@@ -423,7 +429,10 @@ O arquivo caiu de 15 KB para 8 KB.
   com 1.972 espécies isso virava ~3,9 milhões de comparações por render.
   Troquei por um índice montado uma vez.
 - `index.html`: título, meta tags, Open Graph, `<h1>`, placeholder do
-  importador, legendas de conservação e referências bibliográficas.
+  importador, legendas de conservação, referências bibliográficas e o selo da
+  capa, que ainda dizia "688 spp".
+- Os arquivos locais carregam com `?v=20260915b` para furar cache. Troque esse
+  sufixo sempre que publicar uma alteração.
 - `style.css`: classes `.status-EW`, `.status-EX`, `.status-RE`,
   `.status-NA`, o selo `.guild-source-familia` e os selos `.ssp-flag` e
   `.pe-flag` da coluna ICMBio.

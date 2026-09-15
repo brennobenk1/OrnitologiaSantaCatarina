@@ -6704,7 +6704,7 @@ function updateCurveLegend() {
             tr.innerHTML = `
                 <td><em>${r.especie}</em></td>
                 <td>${r.nomePopular}</td>
-                <td><span class="guild-badge ${getGuildClass(r.guilda)}">${r.guilda}</span>${r.fonte && r.fonte.indexOf('AVONET') === 0 ? `<span class="guild-source-avonet" title="AVONET (Tobias et al. 2022) — nicho trofico: ${r.nicho || '—'} · nivel: ${r.nivel || '—'} · habito: ${r.vida || '—'}${r.fonte === 'AVONET-parental' ? ' · traços do taxon parental: ' + (r.via || '').replace('parental:','') : ''}">AVONET</span>` : ''}</td>
+                <td title="${r.fonte && r.fonte.indexOf('AVONET') === 0 ? `Traços funcionais: AVONET (Tobias et al. 2022) — nicho ${r.nicho || '—'} · nível ${r.nivel || '—'} · hábito ${r.vida || '—'}` : 'Atribuição revisada na curadoria do site'}"><span class="guild-badge ${getGuildClass(r.guilda)}">${r.guilda}</span></td>
                 <td><span class="habitat-badge ${getHabitatClass(r.habitat)}">${r.habitat}</span></td>
                 <td style="font-size:13px; color:var(--text-mid);">${r.descricao}</td>
                 <td style="text-align:center;">${r.inTable ? '<span class="in-table-yes">✓</span>' : '<span class="in-table-no">—</span>'}</td>
