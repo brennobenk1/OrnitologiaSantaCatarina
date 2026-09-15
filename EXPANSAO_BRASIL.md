@@ -292,6 +292,69 @@ Campos novos em `speciesInfo` e `BIRD_DATABASE`: `ingles`, `genero`,
 
 ---
 
+## Regionalização — o que virou Brasil e o que continua SC
+
+O site inteiro passou a falar do Brasil. **A única coisa que continua sendo
+de Santa Catarina é a coluna SC da aba Conservação**, que é o recorte
+estadual e faz sentido existir ao lado da lista nacional e da global.
+
+Virou Brasil:
+
+- Cabeçalho, rodapé, título, meta tags e Open Graph
+- Relatórios em PDF e TXT: cabeçalhos, rodapés e blocos de metodologia
+  (eram "Ornitologia SC" / "ORNITOLOGIA AVANÇADA DE SC")
+- Relatório de campo e relatório de mapa
+- Modal de consulta de espécies — era "Espécies Registradas em SC", agora
+  consulta a Lista de Aves do Brasil inteira, com busca por nome em inglês
+- Exemplos do guia que estavam presos ao clima catarinense (a nota de
+  sazonalidade agora fala do gradiente equatorial-subtropical do país)
+- Bloco de fontes: a referência de conservação citava a lista de 2010 e a
+  Portaria 148/2022, ambas superadas
+
+Continua SC:
+
+- Coluna **SC** da tabela de conservação, seu gráfico de pizza e a legenda
+- A referência do Consema (2011) na bibliografia
+- O cálculo de divergência entre listas, que só faz sentido com as três
+
+### Sensibilidade ecológica passou a usar o ICMBio
+
+A aba Indicadoras calculava o bônus de conservação com o maior valor entre
+IUCN e SC — o ICMBio ficava de fora, o que agora seria uma perda grande, já
+que é a lista com melhor cobertura nacional. Passou a considerar as três, e a
+tabela ganhou a coluna ICMBio. O filtro de grau mínimo também passa a aceitar
+espécies que só estão ameaçadas na lista nacional.
+
+## Guia reescrito
+
+O guia ganhou uma seção nova, **🗂️ A base de dados**, logo depois do "Por
+onde começar" (já linkada no índice). Ela cobre o que antes não estava
+documentado em lugar nenhum:
+
+- O que é a lista do CBRO e o que ela abrange, com os números
+- Os códigos de status de ocorrência (BR, VI, VA, En, In, Ex, #)
+- Que a busca aceita nome popular, científico **e em inglês**
+- Que nomes antigos são reconhecidos via `sinonimos.js`
+- **As duas lacunas conhecidas**, ditas abertamente: as 136 espécies sem
+  status IUCN e as 1.284 guildas inferidas por família
+
+A seção de conservação foi refeita para explicar por que as três listas
+divergem, o que `LC` significa de verdade na coluna ICMBio, e como ler os
+selos **ssp.** e **PE**. As categorias EW, EX, RE e NA entraram na legenda.
+
+## Painel de IUCN removido
+
+O `iucn.js` não desenha mais nada na tela e não faz requisição de rede. Ele só
+injeta o `IUCN_TABELA.js` na base ao carregar. A varredura continua existindo,
+mas agora é operação de manutenção pelo console:
+
+```js
+await IUCN.varrer()   // consulta o GBIF só para quem ainda não tem categoria
+IUCN.exportar()       // baixa o IUCN_TABELA.js atualizado
+```
+
+O arquivo caiu de 15 KB para 8 KB.
+
 ## Outras alterações
 
 - `main.js`: os quatro blocos estáticos viraram referências ao módulo, daí a

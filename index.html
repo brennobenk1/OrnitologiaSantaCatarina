@@ -115,7 +115,7 @@
         <p class="description">
             <span style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:8px;">
                 <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">🌳 Filogenia</span>
-                <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">🛡️ Conservação SC · ICMBio · IUCN</span>
+                <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">🛡️ Conservação IUCN · ICMBio · SC</span>
                 <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">🗺️ Mapa GBIF · eBird</span>
                 <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">📈 Curva do Coletor</span>
                 <span style="background:var(--green-pale); border-radius:20px; padding:3px 12px; font-size:12px; font-weight:600; color:var(--green-deep);">📉 Rarefação</span>
@@ -1367,8 +1367,8 @@
             </div>
             <div class="fonte-item">
                 <span class="fonte-tag">🛡️ Conservação</span>
-                <div class="fonte-ref">IUCN Red List v3.1 (2012) + FATMA/ICMBio Lista SC (2010) + ICMBio Portaria MMA 148/2022.</div>
-                <div class="fonte-detail">Status LC/NT/VU/EN/CR/DD seguem critérios A–E da IUCN. O site cruza três listas independentes.</div>
+                <div class="fonte-ref">IUCN Red List (critérios v3.1) · ICMBio, Portaria MMA nº 1.704/2026 · Consema/SC, Resolução nº 002/2011.</div>
+                <div class="fonte-detail">As categorias LC/NT/VU/EN/CR/DD seguem os mesmos critérios A–E da IUCN, mas cada lista os aplica a uma escala diferente — global, nacional e estadual. Por isso o site cruza as três em vez de escolher uma.</div>
                 <div class="fonte-example">📌 <strong>Exemplo:</strong> <em>Formicivora acutirostris</em> — SC=CR / ICMBio=VU / IUCN=NT. Divergência real entre listas regionais e globais.</div>
             </div>
             <div class="fonte-item">
@@ -1399,7 +1399,7 @@
                 <span class="fonte-tag">📅 Sazonalidade · 🌸 Fenologia · 🔗 Co-ocorrência</span>
                 <div class="fonte-ref">Sick, H. (1997) <em>Ornitologia Brasileira</em>. | Gotelli (2000) <em>Ecology</em> 81(9):2606–2621.</div>
                 <div class="fonte-detail">Sazonalidade: registros por mês. Fenograma Gantt: período 1ª–última detecção. Co-ocorrência: nº de levantamentos compartilhados.</div>
-                <div class="fonte-example">📌 <strong>Exemplo:</strong> <em>Sporophila caerulescens</em> em out/nov/dez → migrante de verão austral em SC. <em>Thraupis sayaca</em>+<em>Tangara preciosa</em> co-ocorrem em 4/5 levantamentos → associação de habitat.</div>
+                <div class="fonte-example">📌 <strong>Exemplo:</strong> <em>Sporophila caerulescens</em> em out/nov/dez → migrante de verão austral no Sul e Sudeste. <em>Thraupis sayaca</em>+<em>Tangara preciosa</em> co-ocorrem em 4/5 levantamentos → associação de habitat.</div>
             </div>
 
         </div><!-- fim settings-card fontes -->
@@ -1588,8 +1588,8 @@
     <div id="query-modal" class="modal">
         <div class="modal-content">
             <span class="close-modal" id="close-query-modal">&times;</span>
-            <h2 class="modal-title">Consulta de Espécies Registradas em SC</h2>
-            <input type="text" id="query-search" class="search-box" placeholder="Digite nome científico ou popular...">
+            <h2 class="modal-title">Consulta da Lista de Aves do Brasil (CBRO 2021)</h2>
+            <input type="text" id="query-search" class="search-box" placeholder="Digite nome científico, popular ou em inglês — 1.972 espécies...">
             <div style="max-height: 500px; overflow-y: auto;">
                 <table class="query-table" id="query-table">
                     <thead>
@@ -1651,6 +1651,7 @@
             <p style="font-size:12.5px;font-weight:700;color:var(--green-deep);margin-bottom:10px;letter-spacing:0.3px;">📑 ÍNDICE — clique para ir direto à seção</p>
             <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;">
                 <a href="#h-inicio" style="color:var(--green-base);text-decoration:none;background:white;border:1px solid var(--border-light);border-radius:12px;padding:3px 10px;">🚀 Por onde começar</a>
+                <a href="#h-base" style="color:var(--green-base);text-decoration:none;background:white;border:1px solid var(--border-light);border-radius:12px;padding:3px 10px;">🗂️ A base de dados</a>
                 <a href="#h-importar" style="color:var(--green-base);text-decoration:none;background:white;border:1px solid var(--border-light);border-radius:12px;padding:3px 10px;">📥 Importar Espécies</a>
                 <a href="#h-avist" style="color:var(--green-base);text-decoration:none;background:white;border:1px solid var(--border-light);border-radius:12px;padding:3px 10px;">🔭 Avistamentos</a>
                 <a href="#h-calculo" style="color:var(--green-base);text-decoration:none;background:white;border:1px solid var(--border-light);border-radius:12px;padding:3px 10px;">📋 Cálculo</a>
@@ -1685,6 +1686,33 @@
                 <div style="display:flex;gap:12px;align-items:flex-start;"><span style="background:#e07820;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">4</span><div><strong>Análises avançadas</strong> — acesse Rarefação, Sazonalidade, Turnover, Rank-Abundância, Co-ocorrência e mais para explorar a diversidade da sua área.</div></div>
                 <div style="display:flex;gap:12px;align-items:flex-start;"><span style="background:#e07820;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">5</span><div><strong>💾 Salvar sessão</strong> — antes de fechar o navegador, vá em ⚙️ Configurações → <em>"Exportar Sessão (.json)"</em> para guardar tudo e continuar depois.</div></div>
             </div>
+        </div>
+
+        <!-- ── A BASE DE DADOS ── -->
+        <h3 id="h-base" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">🗂️ A base de dados</h3>
+        <p style="font-size:13.5px;">Tudo que o site calcula sai de uma única base taxonômica: a <strong>Lista de Aves do Brasil do CBRO</strong> (Pacheco <em>et al.</em>, 2021, 2ª edição), o arranjo oficial adotado pelo Comitê Brasileiro de Registros Ornitológicos. Vale entender o que ela cobre antes de interpretar qualquer resultado.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;">
+            <div style="flex:1;min-width:120px;background:var(--green-mist);border-radius:8px;padding:10px 14px;text-align:center;"><strong style="font-size:19px;color:var(--green-deep);">1.972</strong><br><span style="font-size:12px;color:var(--text-muted);">espécies</span></div>
+            <div style="flex:1;min-width:120px;background:var(--green-mist);border-radius:8px;padding:10px 14px;text-align:center;"><strong style="font-size:19px;color:var(--green-deep);">1.998</strong><br><span style="font-size:12px;color:var(--text-muted);">subespécies</span></div>
+            <div style="flex:1;min-width:120px;background:var(--green-mist);border-radius:8px;padding:10px 14px;text-align:center;"><strong style="font-size:19px;color:var(--green-deep);">102</strong><br><span style="font-size:12px;color:var(--text-muted);">famílias</span></div>
+            <div style="flex:1;min-width:120px;background:var(--green-mist);border-radius:8px;padding:10px 14px;text-align:center;"><strong style="font-size:19px;color:var(--green-deep);">33</strong><br><span style="font-size:12px;color:var(--text-muted);">ordens</span></div>
+            <div style="flex:1;min-width:120px;background:var(--green-mist);border-radius:8px;padding:10px 14px;text-align:center;"><strong style="font-size:19px;color:var(--green-deep);">293</strong><br><span style="font-size:12px;color:var(--text-muted);">endêmicas</span></div>
+        </div>
+        <p style="font-size:13.5px;">Cada espécie carrega nome científico, nome popular, nome em inglês, autoria e ano de descrição, posição taxonômica completa e o status de ocorrência do CBRO. <strong>A busca aceita os três nomes</strong> — <em>sabiá-laranjeira</em>, <em>Turdus rufiventris</em> ou <em>Rufous-bellied Thrush</em> chegam à mesma espécie.</p>
+
+        <div style="background:var(--green-mist);border-left:3px solid var(--green-base);border-radius:0 6px 6px 0;padding:10px 14px;margin:12px 0;font-size:13px;">
+            <strong>📌 Status de ocorrência (campo do CBRO):</strong><br>
+            <strong>BR</strong> = residente ou migrante reprodutivo · <strong>VI</strong> = visitante sazonal não reprodutivo · <strong>VA</strong> = vagante · <strong>En</strong> = endêmica do Brasil · <strong>In</strong> = introduzida · <strong>Ex</strong> = extinta no país · <strong>#</strong> = status assumido, não confirmado.
+        </div>
+
+        <p style="font-size:13.5px;"><strong>Nomes que mudaram.</strong> A taxonomia de aves se move rápido, e o site adota alguns nomes posteriores ao CBRO 2021. Se você digitar um nome antigo — <em>Bubulcus ibis</em>, <em>Accipiter bicolor</em>, <em>Pipile jacutinga</em> — o sistema reconhece e avisa qual é o nome aceito. São mais de 200 sinônimos mapeados.</p>
+
+        <div style="background:#fff8e8;border:1px solid var(--amber-light);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;color:#5a4000;">
+            <strong>⚠️ Duas lacunas que você deve conhecer:</strong>
+            <ul style="margin:6px 0 0 18px;">
+                <li><strong>136 espécies sem status IUCN.</strong> Não é falha de carregamento: são táxons que o CBRO separa e o BirdLife ainda agrupa, então não existe avaliação global sob esse nome. Aparecem como <strong>NE</strong>. Concentram-se em Dendrocolaptidae, Thamnophilidae e Thraupidae.</li>
+                <li><strong>Guilda inferida por família.</strong> 688 espécies têm atribuição trófica revisada uma a uma; as demais herdam a guilda típica da família e aparecem com o selo tracejado <strong>fam.</strong> na aba Guilda. Use com cautela em famílias ecologicamente heterogêneas, como Furnariidae e Tyrannidae.</li>
+            </ul>
         </div>
 
         <!-- ── 1. IMPORTAR ── -->
@@ -1756,17 +1784,25 @@
 
         <!-- ── 6. CONSERVAÇÃO ── -->
         <h3 id="h-conserv" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">6. 🛡️ Status de Conservação</h3>
-        <p style="font-size:13.5px;">Para cada espécie importada, mostra automaticamente o status de ameaça em três listas oficiais:</p>
+        <p style="font-size:13.5px;">Para cada espécie importada, mostra o status de ameaça em três listas oficiais. Elas usam os mesmos critérios da IUCN, mas cada uma avalia uma escala diferente — por isso divergem, e a divergência costuma ser a informação mais interessante da aba.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;font-size:13px;">
-            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🏔️ SC</strong><br>Lista de Santa Catarina<br><span style="color:var(--text-muted);font-size:12px;">(Consema, 2011 · NA = fora de SC)</span></div>
-            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🇧🇷 ICMBio</strong><br>Lista Nacional Oficial<br><span style="color:var(--text-muted);font-size:12px;">Portaria MMA nº 1.704/2026</span></div>
-            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🌎 IUCN</strong><br>Lista Global<br><span style="color:var(--text-muted);font-size:12px;">União Internacional para a Conservação</span></div>
+            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🏔️ SC</strong><br>Recorte estadual<br><span style="color:var(--text-muted);font-size:12px;">Consema/SC, 2011 · <strong>NA</strong> = espécie sem ocorrência em Santa Catarina</span></div>
+            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🇧🇷 ICMBio</strong><br>Escala nacional<br><span style="color:var(--text-muted);font-size:12px;">Portaria MMA nº 1.704/2026 · 193 aves ameaçadas</span></div>
+            <div style="flex:1;min-width:180px;background:var(--green-mist);border-radius:8px;padding:10px 14px;"><strong>🌎 IUCN</strong><br>Escala global<br><span style="color:var(--text-muted);font-size:12px;">Red List · cobre 1.836 das 1.972 espécies</span></div>
         </div>
-        <p style="font-size:13px;"><strong>Categorias:</strong> <span style="color:#1e8449;font-weight:700;">LC</span> = segura · <span style="color:#d4860e;font-weight:700;">NT</span> = quase ameaçada · <span style="color:#c0650a;font-weight:700;">VU</span> = vulnerável · <span style="color:#c0392b;font-weight:700;">EN</span> = em perigo · <span style="color:#922b21;font-weight:700;">CR</span> = criticamente em perigo · <span style="color:#717d7e;font-weight:700;">DD</span> = dados insuficientes · <span style="color:#9eaeb0;font-weight:700;">NE</span> = não avaliada.</p>
+        <p style="font-size:13px;"><strong>Categorias:</strong> <span style="color:#1e8449;font-weight:700;">LC</span> = pouco preocupante · <span style="color:#d4860e;font-weight:700;">NT</span> = quase ameaçada · <span style="color:#c0650a;font-weight:700;">VU</span> = vulnerável · <span style="color:#c0392b;font-weight:700;">EN</span> = em perigo · <span style="color:#922b21;font-weight:700;">CR</span> = criticamente em perigo · <span style="color:#6c3483;font-weight:700;">EW</span> = extinta na natureza · <span style="color:#2c3e50;font-weight:700;">EX</span> = extinta · <span style="color:#4a235a;font-weight:700;">RE</span> = regionalmente extinta · <span style="color:#717d7e;font-weight:700;">DD</span> = dados insuficientes · <span style="color:#9eaeb0;font-weight:700;">NE</span> = não avaliada · <span style="color:#c3cbcc;font-weight:700;">NA</span> = não se aplica.</p>
+
+        <div style="background:var(--green-mist);border-left:3px solid var(--green-base);border-radius:0 6px 6px 0;padding:10px 14px;margin:12px 0;font-size:13px;">
+            <strong>📌 Como ler a coluna ICMBio.</strong> A Portaria 1.704/2026 lista só os táxons ameaçados, então <strong>LC</strong> aqui significa "não consta na Lista Nacional" — não é uma avaliação formal de pouco preocupante, que fica na plataforma SALVE.<br><br>
+            Alguns selos aparecem ao lado da categoria:<br>
+            · <strong>ssp. CR</strong> — a espécie não está ameaçada, mas uma subespécie dela está. <em>Pulsatrix perspicillata</em> é comum da Amazônia ao Sudeste, mas a subespécie nominal, da Mata Atlântica, é CR. Passe o mouse para ver quais subespécies e em qual categoria. São 40 espécies nessa situação.<br>
+            · <strong>PE</strong> — Criticamente em Perigo (Possivelmente Extinta). São quatro: <em>Cyanopsitta spixii</em>, <em>Paraclaravis geoffroyi</em>, <em>Calyptura cristata</em> e <em>Myrmotherula fluminensis</em>.
+        </div>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>Ordene por A-Z ou por grau de ameaça com os botões de ordenação.</li>
             <li>Clique em "Mais informações" para abrir a ficha da espécie no WikiAves.</li>
             <li>Três gráficos de pizza mostram a distribuição dos status por lista. Exporta como CSV.</li>
+            <li>A coluna <strong>Div.</strong> destaca espécies em que as listas discordam. <em>Formicivora acutirostris</em> é CR em SC, VU no ICMBio e NT na IUCN — a mesma ave, três leituras de risco conforme a escala.</li>
         </ul>
 
         <!-- ── 7. DISTRIBUIÇÃO ── -->
@@ -1842,7 +1878,7 @@
 
         <!-- ── 14. SAZONALIDADE ── -->
         <h3 id="h-sazon" style="color:var(--green-deep);border-bottom:2px solid var(--border);padding-bottom:6px;font-size:15px;margin-top:24px;">15. 📅 Sazonalidade</h3>
-        <p style="font-size:13.5px;">Mostra em quais meses do ano cada espécie aparece mais. SC tem quatro estações bem marcadas e muitas aves migratórias — esta aba revela esses padrões.</p>
+        <p style="font-size:13.5px;">Mostra em quais meses do ano cada espécie aparece mais. O Brasil vai do clima equatorial ao subtropical, e cada região tem seu próprio calendário de migrantes — esta aba revela o padrão da sua área.</p>
         <ul style="margin-left:20px;font-size:13.5px;">
             <li>🔭 <strong>Importar avistamentos:</strong> o mês real é detectado automaticamente a partir da data.</li>
             <li>Formato manual: <code>Nome da espécie, Mês</code> — mês como número de 1 (janeiro) a 12 (dezembro). Um registro por linha.</li>

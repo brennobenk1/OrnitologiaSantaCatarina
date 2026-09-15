@@ -2068,7 +2068,7 @@ function escapeHtml(str) {
         const horaStr = agora.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
 
         linhas.push('═══════════════════════════════════════════════════════════');
-        linhas.push('   RELATÓRIO PRELIMINAR — ORNITOLOGIA AVANÇADA DE SC');
+        linhas.push('   RELATÓRIO PRELIMINAR — ORNITOLOGIA AVANÇADA DO BRASIL');
         linhas.push('═══════════════════════════════════════════════════════════');
         linhas.push('Gerado em: ' + dataStr + ' às ' + horaStr);
         linhas.push('');
@@ -2514,7 +2514,7 @@ function escapeHtml(str) {
         });
 
         linhas.push('═══════════════════════════════════════════════════════════');
-        linhas.push('  Relatório gerado por Ornitologia Avançada de SC');
+        linhas.push('  Relatório gerado por Ornitologia Avançada do Brasil');
         linhas.push('  https://brennobenk1.github.io/OrnitologiaSantaCatarina/');
         linhas.push('═══════════════════════════════════════════════════════════');
 
@@ -9042,7 +9042,7 @@ function runIndicadoras() {
     // Bônus de conservação (0-4) — status de ameaça:
     //   IUCN (2012), Red List Categories and Criteria v3.1
     //   ICMBio (2018), Livro Vermelho da Fauna Brasileira Ameaçada de Extinção
-    //   Lista Vermelha da Fauna Ameaçada de Santa Catarina
+    //   Lista Vermelha da Fauna Ameaçada de Santa Catarina (recorte estadual)
     // ─────────────────────────────────────────────────────────────────────────
     const GUILD_SCORE = {
         // 3 = especialistas estritos / vulnerabilidade documentada à perturbação
@@ -9055,9 +9055,9 @@ function runIndicadoras() {
         'Onívoro': 0
     };
     const HABITAT_SCORE = {'Florestal': 3, 'Aquático': 3, 'Costeiro': 2, 'Campestre': 2, 'Aéreo': 1, 'Generalista': 0};
-    // Bônus de conservação: integra status IUCN/SC na sensibilidade ecológica
+    // Bônus de conservação: integra IUCN, ICMBio e a lista estadual de SC
     const CONS_BONUS = { 'LC': 0, 'NT': 1, 'VU': 2, 'EN': 3, 'CR': 4, 'DD': 0, 'NE': 0 };
-    function calcSensitivity(guilda, habitat, iucn, sc) {
+    function calcSensitivity(guilda, habitat, iucn, sc, icmbio) {
         if (!guilda || guilda === '-') return { level: '?', score: -1, label: '?', bg: '#f5f5f5' };
         // Guildas compostas ("Insetívoro/Frugívoro") são separadas por "/" e
         // pontuadas por token exato — evita que "Insetívoro aéreo" herde a nota
@@ -9072,8 +9072,8 @@ function runIndicadoras() {
             const val = HABITAT_SCORE[tok.trim()];
             if (val !== undefined && val > hScore) hScore = val;
         });
-        // Bônus conservação: usa o mais alto entre IUCN e a Lista Vermelha de SC
-        const consBonus = Math.max(CONS_BONUS[iucn] ?? 0, CONS_BONUS[sc] ?? 0);
+        // Bônus conservação: usa o mais alto entre IUCN, ICMBio e a Lista Vermelha de SC
+        const consBonus = Math.max(CONS_BONUS[iucn] ?? 0, CONS_BONUS[sc] ?? 0, CONS_BONUS[icmbio] ?? 0);
         const total = gScore + hScore + consBonus;
         // Limiares com bônus integrado (máx possível: 3+3+4=10)
         if (total >= 7) return { level: 'Crítica', score: total, label: `🔴 Crítica (${total}pts)`, bg: '#f8d7d7' };
@@ -9086,10 +9086,11 @@ function runIndicadoras() {
         const guild = typeof GUILDA_DB !== 'undefined' ? GUILDA_DB[sp] : null;
         const cons = typeof conservationData !== 'undefined' ? conservationData.find(c=>c.especie===sp) : null;
         const iucnScore = cons ? (IUCN_ORDER[cons.iucn] ?? -1) : -1;
-        const scScore = cons ? (IUCN_ORDER[cons.sc] ?? -1) : -1;
-        if (iucnScore >= minScore || scScore >= minScore) {
-            const sens = calcSensitivity(guild?.guilda || '-', guild?.habitat || '-', cons?.iucn || 'LC', cons?.sc || 'LC');
-            results.push({ sp, nomePopular: cons?.nomePopular||'-', iucn: cons?.iucn||'NE', sc: cons?.sc||'NE', guilda: guild?.guilda||'-', habitat: guild?.habitat||'-', sensitivity: sens.level, sensLabel: sens.label, sensBg: sens.bg, sensScore: sens.score });
+        const scScore  = cons ? (IUCN_ORDER[cons.sc] ?? -1) : -1;
+        const icmScore = cons ? (IUCN_ORDER[cons.icmbio] ?? -1) : -1;
+        if (iucnScore >= minScore || scScore >= minScore || icmScore >= minScore) {
+            const sens = calcSensitivity(guild?.guilda || '-', guild?.habitat || '-', cons?.iucn || 'LC', cons?.sc || 'LC', cons?.icmbio || 'LC');
+            results.push({ sp, nomePopular: cons?.nomePopular||'-', iucn: cons?.iucn||'NE', icmbio: cons?.icmbio||'NE', sc: cons?.sc||'NE', guilda: guild?.guilda||'-', habitat: guild?.habitat||'-', sensitivity: sens.level, sensLabel: sens.label, sensBg: sens.bg, sensScore: sens.score });
         }
     });
     results.sort((a,b) => {
@@ -9098,13 +9099,14 @@ function runIndicadoras() {
         if (sd !== 0) return sd;
         return (IUCN_ORDER[b.iucn]??-1) - (IUCN_ORDER[a.iucn]??-1);
     });
-    const COLOR = {'LC':'#1e8449','NT':'#d4860e','VU':'#c0650a','EN':'#c0392b','CR':'#922b21','DD':'#717d7e','NE':'#9eaeb0'};
-    let html = `<table style="width:100%;border-collapse:collapse;"><thead><tr>${['Espécie','Nome Popular','IUCN','SC','Guilda','Habitat','Sensibilidade (pontos)'].map(h=>`<th style="background:var(--green-mid);color:white;padding:9px 14px;font-size:12px;">${h}</th>`).join('')}</tr></thead><tbody>`;
+    const COLOR = {'LC':'#1e8449','NT':'#d4860e','VU':'#c0650a','EN':'#c0392b','CR':'#922b21','EW':'#6c3483','EX':'#2c3e50','RE':'#4a235a','DD':'#717d7e','NE':'#9eaeb0','NA':'#c3cbcc'};
+    let html = `<table style="width:100%;border-collapse:collapse;"><thead><tr>${['Espécie','Nome Popular','IUCN','ICMBio','SC','Guilda','Habitat','Sensibilidade (pontos)'].map(h=>`<th style="background:var(--green-mid);color:white;padding:9px 14px;font-size:12px;">${h}</th>`).join('')}</tr></thead><tbody>`;
     results.forEach(r => {
         html += `<tr>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);"><em style="font-size:13px;">${r.sp}</em></td>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-size:13px;">${r.nomePopular}</td>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-weight:700;color:${COLOR[r.iucn]||'#333'};">${r.iucn}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-weight:700;color:${COLOR[r.icmbio]||'#333'};">${r.icmbio}</td>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-weight:700;color:${COLOR[r.sc]||'#333'};">${r.sc}</td>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-size:12px;">${r.guilda}</td>
             <td style="padding:8px 12px;border-bottom:1px solid var(--border-light);font-size:12px;">${r.habitat}</td>
@@ -9115,7 +9117,7 @@ function runIndicadoras() {
     html += `<div style="margin-top:12px;padding:10px 14px;background:var(--green-mist);border-radius:6px;font-size:11.5px;color:var(--text-mid);line-height:1.8;">
         <strong>Pontuação ecológica:</strong> Nectarívoro/Piscívoro/Malacófago=3 · Carnívoro/Frugívoro/Insetívoro-aéreo=2 · Insetívoro/Herbívoro/Granívoro/Filtrador=1 · Onívoro/Detritívoro=0
         + Florestal/Aquático=3 · Costeiro=2 · Campestre/Aéreo=1 · Generalista=0
-        + <strong>Bônus conservação</strong> (melhor entre IUCN e SC): LC=0 · NT=1 · VU=2 · EN=3 · CR=4
+        + <strong>Bônus conservação</strong> (maior entre IUCN, ICMBio e SC): LC=0 · NT=1 · VU=2 · EN=3 · CR=4
         → 🔴 Crítica(≥7) · 🟠 Alta(5–6) · 🟡 Média(3–4) · 🟢 Baixa(≤2)
     </div>`;
     document.getElementById('indicadoras-results').innerHTML = results.length ? html : '<p style="padding:14px;color:var(--text-muted);">Nenhuma espécie atende ao limiar selecionado.</p>';
@@ -11091,7 +11093,7 @@ function exportPDF() {
         doc.setFont('helvetica','bold');
         doc.setFontSize(13);
         doc.setTextColor(27, 94, 32);
-        doc.text('Registros de Campo — Ornitologia SC', 14, 14);
+        doc.text('Registros de Campo — Ornitologia Avançada do Brasil', 14, 14);
         doc.setFont('helvetica','normal');
         doc.setFontSize(8);
         doc.setTextColor(100,100,100);
@@ -11139,7 +11141,7 @@ function exportPDF() {
             doc.setFont('helvetica','bold');
             doc.setFontSize(12);
             doc.setTextColor(27, 94, 32);
-            doc.text('Mapa de Registros — Ornitologia SC', margin, margin + 6);
+            doc.text('Mapa de Registros — Ornitologia Avançada do Brasil', margin, margin + 6);
             doc.setFont('helvetica','normal');
             doc.setFontSize(7.5);
             doc.setTextColor(100,100,100);
@@ -12339,7 +12341,7 @@ if (document.readyState === 'loading') {
             // Rodapé
             doc.setFontSize(8);
             doc.setTextColor(150, 150, 150);
-            doc.text(`Ornitologia SC · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
+            doc.text(`Ornitologia Avançada do Brasil · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
             doc.text(`Página ${doc.getNumberOfPages()}`, W - margin, H - 8, { align: 'right' });
             doc.setTextColor(30, 30, 30);
         }
@@ -12455,7 +12457,7 @@ if (document.readyState === 'loading') {
 
         doc.setFontSize(8);
         doc.setTextColor(120, 180, 150);
-        doc.text('Ferramenta: Ornitologia SC | Baseado em CBRO (Pacheco et al. 2021)', W / 2, 70, { align: 'center' });
+        doc.text('Ferramenta: Ornitologia Avançada do Brasil | Base: CBRO 2021 (Pacheco et al.)', W / 2, 70, { align: 'center' });
 
         y = 95;
         doc.setTextColor(40, 40, 40);
@@ -12495,7 +12497,7 @@ if (document.readyState === 'loading') {
         sectionTitle('1. INTRODUÇÃO');
         bodyText('Este relatório foi gerado automaticamente pela plataforma Ornitologia Avançada do Brasil, uma ferramenta digital para análise e catalogação das aves brasileiras. A base taxonômica é a Lista de Aves do Brasil do CBRO (Pacheco et al., 2021, 2ª edição), com 1.972 espécies e 1.998 subespécies. As análises seguem protocolos padronizados de ecologia de comunidades.');
         y += 3;
-        bodyText(`Foram registradas ${imported.length} espécie(s) nesta sessão de análise. Os dados taxonômicos seguem Pacheco et al. (2021) — segunda edição do CBRO — e as listas de conservação consultadas são: Lista Vermelha de SC, Lista ICMBio (fauna ameaçada do Brasil) e Lista Vermelha IUCN (global). Este relatório consolida automaticamente os resultados de TODAS as análises executadas pelo usuário nas demais abas da plataforma (cadeia alimentar, guilda, descritores, distribuição taxonômica, indicadoras, cluster, picos de horário, esforço de avistamentos, rarefação, sazonalidade, fenologia, turnover, rank-abundância, co-ocorrência, curvas de acumulação e Darwin Core). Análises que não tenham sido executadas pelo usuário durante a sessão aparecerão indicadas como "não executada".`);
+        bodyText(`Foram registradas ${imported.length} espécie(s) nesta sessão de análise. Os dados taxonômicos seguem Pacheco et al. (2021) — segunda edição do CBRO — e as listas de conservação consultadas são: Lista Vermelha de Santa Catarina (Consema, 2011), Lista Nacional Oficial do ICMBio (Portaria MMA 1.704/2026) e Lista Vermelha da IUCN (global). Este relatório consolida automaticamente os resultados de TODAS as análises executadas pelo usuário nas demais abas da plataforma (cadeia alimentar, guilda, descritores, distribuição taxonômica, indicadoras, cluster, picos de horário, esforço de avistamentos, rarefação, sazonalidade, fenologia, turnover, rank-abundância, co-ocorrência, curvas de acumulação e Darwin Core). Análises que não tenham sido executadas pelo usuário durante a sessão aparecerão indicadas como "não executada".`);
         y += 5;
 
         // ── 2. LISTA DE ESPÉCIES ─────────────────────────────────────────
@@ -12801,7 +12803,7 @@ if (document.readyState === 'loading') {
         for (let p = 1; p <= lastPage; p++) {
             doc.setPage(p);
             if (p > 1) {
-                doc.text(`Ornitologia SC · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
+                doc.text(`Ornitologia Avançada do Brasil · Relatório gerado em ${new Date().toLocaleDateString('pt-BR')}`, margin, H - 8);
                 doc.text(`Página ${p} de ${lastPage}`, W - margin, H - 8, { align: 'right' });
             }
         }
