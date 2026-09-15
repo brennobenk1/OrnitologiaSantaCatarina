@@ -1037,6 +1037,17 @@
         .status-EX { color: #2c3e50; font-weight: 800; }
         .status-RE { color: #4a235a; font-weight: 800; }
         .status-NA { color: #c3cbcc; font-weight: 500; }
+        .ssp-flag {
+            display: inline-block; margin-left: 6px; padding: 1px 6px;
+            border-radius: 10px; border: 1px solid currentColor;
+            font-size: 10px; font-weight: 800; letter-spacing: .02em;
+            vertical-align: middle; cursor: help; opacity: .95;
+        }
+        .pe-flag {
+            display: inline-block; margin-left: 5px; padding: 1px 5px;
+            border-radius: 10px; background: #2c3e50; color: #fff;
+            font-size: 10px; font-weight: 800; vertical-align: middle; cursor: help;
+        }
         /* Guilda inferida no nivel de familia - dado aproximado, nao curado */
         .guild-source-familia {
             display: inline-block; margin-left: 6px; padding: 1px 6px;

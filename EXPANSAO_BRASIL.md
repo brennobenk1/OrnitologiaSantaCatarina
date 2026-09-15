@@ -2,14 +2,15 @@
 
 ## Como instalar
 
-Copie os quatro arquivos para a raiz do repositório, substituindo os
-existentes. O único arquivo novo é `cbro.js`; ele já está referenciado no
-`index.html`, na ordem correta:
+Copie os cinco arquivos para a raiz do repositório, substituindo os
+existentes. Os arquivos novos são `cbro.js` e `iucn.js`; ambos já estão referenciados
+no `index.html`, na ordem correta:
 
 ```html
 <script src="cbro.js"></script>     <!-- base de dados (novo) -->
 <script src="main.js"></script>
 <script src="sinonimos.js"></script>
+<script src="iucn.js"></script>     <!-- status global IUCN (novo) -->
 ```
 
 `cbro.js` **precisa** vir antes do `main.js`. Se faltar, o `main.js` lança um
@@ -73,6 +74,40 @@ Quatro espécies carregam `possivelmenteExtinta: true`, correspondendo à
 categoria **CR (PE)** da portaria: *Paraclaravis geoffroyi*,
 *Calyptura cristata*, *Myrmotherula fluminensis* e *Cyanopsitta spixii*.
 
+### Subespécies ameaçadas — o caso *Pulsatrix perspicillata*
+
+Você apontou que *Pulsatrix perspicillata* apareceu como LC. Vale explicar o
+que está acontecendo, porque a resposta não é simplesmente trocar para CR.
+
+A portaria, no item 292, lista **_Pulsatrix perspicillata pulsatrix_** — a
+subespécie nominal, da Mata Atlântica — como CR. A espécie
+*Pulsatrix perspicillata* **não** está listada: ela ocorre da Amazônia ao
+Sudeste e é comum em boa parte dessa área. Marcá-la como CR diria que o
+murucututu inteiro está criticamente ameaçado no Brasil, o que não é o que a
+norma diz.
+
+Só que deixar a célula como um `LC` seco também está errado — a informação
+some da tela. **Isso era o defeito de verdade, e foi corrigido:** a coluna
+ICMBio agora mostra `LC` seguido de um selo vermelho **ssp. CR**, e o tooltip
+lista exatamente quais subespécies estão no Anexo I e em qual categoria.
+
+São 40 espécies nessa situação. Alguns exemplos:
+
+| Espécie | ICMBio | Selo | Subespécies listadas |
+|---|---|---|---|
+| *Pulsatrix perspicillata* | LC | ssp. CR | *pulsatrix* = CR |
+| *Sclerurus caudacutus* | LC | ssp. CR | *caligineus* = CR · *umbretta* = CR |
+| *Neomorphus geoffroyi* | LC | ssp. CR | *amazonicus* = VU · *dulcis* = EN · *geoffroyi* = CR (PE) |
+| *Penelope superciliaris* | LC | ssp. EN | *alagoensis* = EN |
+| *Thamnophilus caerulescens* | LC | ssp. VU | *cearensis* = VU · *pernambucensis* = VU |
+
+As quatro espécies em categoria **CR (PE)** (*Cyanopsitta spixii*,
+*Paraclaravis geoffroyi*, *Calyptura cristata*, *Myrmotherula fluminensis*)
+ganharam um selo preto **PE** ao lado do CR.
+
+Se mesmo assim você preferir que a espécie herde a pior categoria das
+subespécies, é uma linha em `main.js` — me avisa que eu troco.
+
 **Leia `LC` com cuidado.** A portaria lista apenas táxons ameaçados. `LC` aqui
 significa "não consta na Lista Nacional Oficial", não uma avaliação formal de
 Pouco Preocupante — essas ficam na plataforma SALVE do ICMBio. Essa já era a
@@ -95,23 +130,40 @@ receberam `sc: "NA"` (sem ocorrência registrada em SC). Adicionei `NA`,
 `EW`, `EX` e `RE` às paletas, às ordenações e ao cálculo de divergência entre
 listas, para que `NA` não seja contado como discordância.
 
-### IUCN — pendente para 1.283 espécies
+### IUCN — `iucn.js`
 
-Aqui eu parei. A Portaria 1.704/2026 é uma norma brasileira e **não contém
-nenhum dado da IUCN** — as duas listas usam os mesmos critérios, mas avaliam
-escalas diferentes (nacional vs. global) e divergem com frequência.
-*Aburria jacutinga*, por exemplo, está EN nas duas, mas *Penelope
-superciliaris* é LC no ICMBio e NT na IUCN.
+A Portaria 1.704/2026 não contém nenhum dado da IUCN. São listas diferentes:
+mesmos critérios, escalas diferentes (nacional x global), e divergem com
+frequência — *Penelope superciliaris* é LC no ICMBio e NT na IUCN.
 
-Preencher os 1.283 campos de memória produziria dezenas de erros silenciosos
-numa base científica, então deixei `NE`. Os 689 valores que você já tinha
-continuam lá.
+Procurei uma base bulk da Red List que eu pudesse embutir e não achei
+nenhuma aberta e atual. Digitar 1.283 categorias de memória produziria
+dezenas de erros silenciosos numa base científica, então fiz outra coisa:
+**`iucn.js`**, um módulo que busca as categorias na API pública do GBIF, que
+espelha a Red List oficial e não exige chave de acesso.
 
-Para fechar esse buraco você precisa de um export do Red List. O caminho mais
-direto é pedir uma chave em `api.iucnredlist.org`, baixar as avaliações de
-Aves para o Brasil em CSV e cruzar pelo nome científico — a estrutura já está
-pronta para receber, basta trocar o campo `iucn` em `cbro.js`. Se você
-conseguir o CSV, eu escrevo o cruzamento.
+Como funciona: um painel aparece no canto inferior esquerdo mostrando a
+cobertura atual. Ao clicar em *Completar status IUCN*, ele resolve cada nome
+no backbone do GBIF e busca a categoria, seis consultas em paralelo, com o
+resultado salvo no navegador conforme avança — dá para parar e retomar.
+
+Terminada a varredura, **Exportar tabela** gera um `IUCN_TABELA.js` com todas
+as categorias. Commite esse arquivo e inclua antes do `iucn.js`:
+
+```html
+<script src="IUCN_TABELA.js"></script>
+<script src="iucn.js"></script>
+```
+
+A partir daí o site carrega os status na hora, sem rede, e a tabela tem
+prioridade sobre o cache local. Quando sair uma versão nova da Red List,
+basta apagar o cache (`IUCN.limpar()` no console) e rodar de novo.
+
+Os 689 valores que você já tinha continuam intactos e servem de conferência:
+se o GBIF divergir de algum deles, vale investigar antes de aceitar.
+
+A varredura leva alguns minutos. Espécies sem avaliação na Red List ficam
+listadas em `window.IUCN_FALHAS` depois que termina.
 
 ---
 
@@ -205,13 +257,15 @@ Campos novos em `speciesInfo` e `BIRD_DATABASE`: `ingles`, `genero`,
 - `index.html`: título, meta tags, Open Graph, `<h1>`, placeholder do
   importador, legendas de conservação e referências bibliográficas.
 - `style.css`: classes `.status-EW`, `.status-EX`, `.status-RE`,
-  `.status-NA` e o selo `.guild-source-familia`.
+  `.status-NA`, o selo `.guild-source-familia` e os selos `.ssp-flag` e
+  `.pe-flag` da coluna ICMBio.
 
 ---
 
 ## O que revisar antes de publicar
 
-1. **IUCN de 1.283 espécies** — precisa do export do Red List.
+1. **IUCN** — rodar a varredura do `iucn.js` uma vez e commitar o
+   `IUCN_TABELA.js` gerado.
 2. **Guilda de 1.284 espécies** — inferida por família, marcada com **fam.**
 3. **Filogenia** — a árvore já cobria as 33 ordens brasileiras; não mexi.
 4. **`photo_index.json`** — continua só com as fotos de SC. As espécies novas

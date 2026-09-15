@@ -82,6 +82,23 @@ function findBirdByNormalizedName(input) {
         }
         const CBRO = window.CBRO_DATA;
 
+        // Pior categoria entre as subespécies listadas no Anexo I da Portaria
+        // MMA 1.704/2026. A espécie NÃO herda a categoria — Pulsatrix
+        // perspicillata não é CR no Brasil, quem é CR é a subespécie nominal.
+        // Mas o dado precisa ficar visível, então fica neste campo à parte.
+        const _ORDEM_RISCO = { 'CR': 5, 'EN': 4, 'VU': 3, 'NT': 2, 'LC': 1 };
+        function piorCategoria(mapa) {
+            if (!mapa) return '';
+            let pior = '', peso = 0;
+            Object.keys(mapa).forEach(function (k) {
+                const cat = String(mapa[k]).replace(' (PE)', '').trim();
+                const w = _ORDEM_RISCO[cat] || 0;
+                if (w > peso) { peso = w; pior = cat; }
+            });
+            return pior;
+        }
+        window.piorCategoriaSsp = piorCategoria;
+
         // conservationData mantém o formato histórico { especie, nomePopular, sc, icmbio, iucn }
         const conservationData = CBRO.conservationData;
 
@@ -112,12 +129,16 @@ function findBirdByNormalizedName(input) {
                 introduzida: !!item.introduzida,
                 cbroId:      item.cbroId || '',
                 nomeCBRO:    item.nomeCBRO || '',
+                sspAmeacadas: item.sspAmeacadas || null,
+                icmbioSsp:   piorCategoria(item.sspAmeacadas),
+                possivelmenteExtinta: !!item.possivelmenteExtinta,
                 subespecies: CBRO.subespeciesPorEspecie[item.especie] || []
             };
         });
 
         // Expor speciesInfo globalmente para acesso pelo módulo de PDF
         window.speciesInfo = speciesInfo;
+        window.conservationData = conservationData;
 
         // Construir BIRD_DATABASE a partir de speciesInfo
         // CORRIGIDO: exposto globalmente via window para ser acessível em outros <script>
@@ -3235,10 +3256,13 @@ function scheduleTreeUpdate() {
                 common: info.nomePopular,
                 sc: info.sc,
                 icmbio: info.icmbio,
-                iucn: info.iucn
+                iucn: info.iucn,
+                icmbioSsp: info.icmbioSsp || '',
+                sspAmeacadas: info.sspAmeacadas || null,
+                possivelmenteExtinta: !!info.possivelmenteExtinta
             });
         } else {
-            rows.push({ ordem: '---', familia: '---', subfamilia: '---', scientific: especie, common: '---', sc: 'NE', icmbio: 'NE', iucn: 'NE' });
+            rows.push({ ordem: '---', familia: '---', subfamilia: '---', scientific: especie, common: '---', sc: 'NE', icmbio: 'NE', iucn: 'NE', icmbioSsp: '', sspAmeacadas: null, possivelmenteExtinta: false });
         }
     });
 
@@ -3280,7 +3304,7 @@ function scheduleTreeUpdate() {
             divBadge = `<span style="color:#27ae60;font-size:13px;" title="Status consistente entre as listas">✅</span>`;
         }
         if (trClass) tr.classList.add(trClass);
-        tr.innerHTML = `<td>${r.ordem}</td><td>${r.familia}</td><td>${r.subfamilia}</td><td><em>${r.scientific}</em></td><td>${r.common}</td><td class="status-sc status-${r.sc}">${r.sc}</td><td class="status-icmbio status-${r.icmbio}">${r.icmbio}</td><td class="status-iucn status-${r.iucn}">${r.iucn}</td><td style="text-align:center;">${divBadge}</td>`;
+        tr.innerHTML = `<td>${r.ordem}</td><td>${r.familia}</td><td>${r.subfamilia}</td><td><em>${r.scientific}</em></td><td>${r.common}</td><td class="status-sc status-${r.sc}">${r.sc}</td><td class="status-icmbio status-${r.icmbio}">${r.icmbio}${r.icmbioSsp ? `<span class="ssp-flag status-${r.icmbioSsp}" title="Subespécie(s) na Lista Nacional (Portaria MMA 1.704/2026): ${Object.entries(r.sspAmeacadas).map(([k,v]) => k + ' = ' + v).join(' · ')}">ssp. ${r.icmbioSsp}</span>` : ''}${r.possivelmenteExtinta ? '<span class="pe-flag" title="Criticamente em Perigo (Possivelmente Extinta)">PE</span>' : ''}</td><td class="status-iucn status-${r.iucn}">${r.iucn}</td><td style="text-align:center;">${divBadge}</td>`;
         conservationTableBody.appendChild(tr);
     });
 renderAllCharts(rows);
