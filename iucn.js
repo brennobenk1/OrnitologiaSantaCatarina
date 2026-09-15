@@ -46,8 +46,23 @@
         return tocou;
     }
 
+    // Faxina de versoes antigas: o iucn.js anterior desenhava um painel na tela
+    // e guardava um cache no navegador. Se sobrou algum, some com ele.
+    (function limpezaVersaoAntiga() {
+        try {
+            const velho = document.getElementById('iucn-panel');
+            if (velho) velho.remove();
+            localStorage.removeItem('iucn_cache_v1');
+            localStorage.removeItem('iucn_cache_v2');
+        } catch (e) { /* sem DOM ou sem storage: nada a limpar */ }
+    })();
+
     function instalar() {
         if (!window.CBRO_DATA || !window.speciesInfo) return false;
+        try {
+            const velho = document.getElementById('iucn-panel');
+            if (velho) velho.remove();
+        } catch (e) {}
         indexar();
         const tab = window.IUCN_TABELA || {};
         let n = 0;
